@@ -253,7 +253,7 @@
             <div class="modal-content shadow">
                 <div class="modal-header border-bottom-0 pb-0">
                     <h5 class="modal-title fw-bold">Pengaturan Zona</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <label class="card-label">Daftar Zona Aktif (Pisahkan koma)</label>
@@ -270,7 +270,7 @@
             <div class="modal-content shadow">
                 <div class="modal-header border-bottom-0 pb-0">
                     <h5 class="modal-title fw-bold">Entry Proxy (Zona <span id="poolZoneName"></span>)</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="d-flex gap-2 mb-3">
@@ -279,7 +279,7 @@
                     </div>
                     <div style="max-height: 300px; overflow-y: auto;">
                         <table class="clean-table">
-                            <thead><tr><th>Proxy</th><th>IP Target</th><th>Status Port</th><th>Aksi</th></tr></thead>
+                            <thead><tr><th>Proxy</th><th>IP Target</th><th>Status Port</th><th class="text-end">Aksi</th></tr></thead>
                             <tbody id="poolTableBody"></tbody>
                         </table>
                     </div>
@@ -294,12 +294,12 @@
             <div class="modal-content shadow">
                 <div class="modal-header border-bottom-0 pb-0">
                     <h5 class="modal-title fw-bold">Top Proxy Data</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div style="max-height: 350px; overflow-y: auto;">
                         <table class="clean-table">
-                            <thead><tr><th>Rank</th><th>IP Address</th><th>Location</th><th>Peak Act</th></tr></thead>
+                            <thead><tr><th>Rank</th><th>IP Address</th><th>Location</th><th class="text-end">Peak Act</th></tr></thead>
                             <tbody id="topTableBody"></tbody>
                         </table>
                     </div>
@@ -340,7 +340,6 @@
             document.getElementById('themeToggleBtn').innerText = theme === 'dark' ? '☀️' : '🌙';
             document.getElementById('themeToggleBtn').title = theme === 'dark' ? 'Mode Terang' : 'Mode Gelap';
             
-            // Fix bootstrap modal close button contrast on dark mode
             if (theme === 'dark') {
                 document.documentElement.style.setProperty('--btn-close-filter', 'invert(1) grayscale(100%) brightness(200%)');
             } else {
@@ -405,7 +404,7 @@
                     currentGostZone = zones[0];
                 } else { currentGostZone = zs.value; }
 
-                if (gostSettings.PING_TARGET) document.getElementById('gostPingDisp').innerText = `to ${gostSettings.PING_TARGET}`;
+                if (gostSettings.PING_TARGET) document.getElementById('gostPingDisp').innerText = `${gostSettings.PING_TARGET}`;
                 
                 const btnFO = document.getElementById('btnGostFO');
                 if (gostSettings.AUTO_FAILOVER === "1") { btnFO.classList.add("btn-green"); btnFO.innerText = "Failover: ON"; }
@@ -422,7 +421,7 @@
                 let totBinds=0, totOn=0, totFo=0, totOff=0;
 
                 if (my_px.length === 0) {
-                    html = '<tr><td colspan="6" class="text-center py-4 text-muted">Belum ada data port di zona ini.</td></tr>';
+                    html = '<tr><td colspan="7" class="text-center py-4 text-muted">Belum ada data port di zona ini.</td></tr>';
                 } else {
                     my_px.forEach(p => {
                         let st = p.status || "";
@@ -437,13 +436,13 @@
                         let short_proxy = p.proxy || "-";
                         if(short_proxy.length > 25) short_proxy = short_proxy.substring(0, 25) + '...';
 
-                        let ipCol = p.ip !== "-" ? `<span class="badge-ip">${p.ip}</span> <span class="badge-tag">1000</span>` : "-";
+                        let ipCol = p.ip !== "-" ? `<span class="badge-ip">${p.ip}</span> <span class="badge-tag" style="background:var(--accent-blue);color:#fff;">1000</span>` : "-";
 
                         let btnAction = `<button class="btn-action text-danger" onclick="bindPort('${p.port}', '')">Unbind</button>`;
                         if(st.includes('Free')) btnAction = `<button class="btn-action text-primary" onclick="showPoolModal('${p.port}')">Bind</button>`;
 
                         html += `<tr>
-                            <td class="ps-4 fw-bold text-dark">${p.port}</td>
+                            <td class="ps-4 fw-bold" style="color:var(--text-dark);">${p.port}</td>
                             <td>${ipCol}</td>
                             <td class="font-monospace text-muted" style="font-size:0.75rem;">${short_proxy}</td>
                             <td>${p.location}</td>
@@ -460,7 +459,7 @@
                 
                 document.getElementById('gostTableBody').innerHTML = html;
             } catch (e) {
-                document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">Backend Error: ${e.message}</td></tr>`;
+                document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="7" class="text-center py-4 text-danger">Backend Error: ${e.message}</td></tr>`;
             }
         }
 
@@ -499,7 +498,9 @@
             const res = await reqGost("top");
             if (res.success) {
                 let html = '';
-                res.top.forEach((t, i) => { html += `<tr><td>${i+1}</td><td class="fw-bold">${t.ip}</td><td>${t.location}</td><td class="text-end">${t.peak}</td></tr>`; });
+                res.top.forEach((t, i) => {
+                    html += `<tr><td>${i+1}</td><td class="fw-bold" style="color:var(--text-dark);">${t.ip}</td><td>${t.location}</td><td class="text-end fw-bold">${t.peak}</td></tr>`;
+                });
                 document.getElementById('topTableBody').innerHTML = html; topModalInst.show();
             }
         }
@@ -511,20 +512,24 @@
                 if (res.status === 401 || res.redirected) { window.location.href = '/login'; return; }
                 const data = await res.json();
                 
-                document.getElementById('globalBalance').innerText = (data.total_balance || 0).toFixed(2);
-                document.getElementById('globalLifetime').innerText = (data.total_lifetime || 0).toFixed(2);
+                if(document.getElementById('globalBalance')) {
+                    document.getElementById('globalBalance').innerText = (data.total_balance || 0).toFixed(2);
+                }
 
                 if (!data.accounts || data.accounts.length === 0) {
-                    document.getElementById('earnappContent').innerHTML = `<div class="text-center py-5 text-muted">Belum ada klien. Klik "Client Setup" di kiri.</div>`; return;
+                    document.getElementById('earnappContent').innerHTML = `<div class="text-center py-5 text-muted">Belum ada klien terdaftar. Klik "⚙️ Client Setup" di kiri.</div>`; return;
                 }
 
                 let html = '';
                 data.accounts.forEach(acc => {
-                    if (acc.error) return;
+                    if (acc.error) {
+                        html += `<div class="card-summary border-danger mb-4"><h6 class="text-danger mb-0">Error Client ${acc.name}: ${acc.error}</h6></div>`;
+                        return;
+                    }
                     
                     html += `
                     <div class="mb-5">
-                        <h5 class="fw-bold text-dark mb-3">Client : ${acc.name}</h5>
+                        <h5 class="fw-bold mb-3" style="color:var(--text-dark);">Client : ${acc.name}</h5>
                         <div class="row g-3 mb-4">
                             <div class="col-md-3"><div class="card-summary card-top-purple h-100 mb-0"><div class="card-label">STATUS CLIENT</div><div class="card-value ${acc.active_nodes>0?'text-success':'text-danger'}">${acc.active_nodes>0?'ONLINE':'OFFLINE'}</div></div></div>
                             <div class="col-md-3"><div class="card-summary card-top-blue h-100 mb-0"><div class="card-label">TOTAL PENDAPATAN</div><div class="card-value">$${acc.balance.toFixed(2)}</div></div></div>
@@ -541,15 +546,18 @@
                         let st = dev.status === 'banned' ? 'blocked' : dev.status;
                         let sB = `<span style="color:var(--text-muted);"><span class="status-dot dot-off"></span>OFFLINE</span>`;
                         if (st === 'online') sB = `<span style="color:var(--badge-green-text); font-weight:700;"><span class="status-dot dot-on"></span>ONLINE</span>`;
-                        else if (st === 'blocked') sB = `<span class="badge-tag bg-danger" title="${dev.error_reason || ''}">BLOCKED</span>`;
+                        else if (st === 'blocked') sB = `<span class="badge-tag" style="background:var(--badge-red-text); color:#fff;" title="${dev.error_reason || ''}">BLOCKED</span>`;
                         
                         const ipH = (dev.ips && dev.ips.length > 0) ? dev.ips.map(ip => `<span class="badge-ip">${ip}</span>`).join(' ') : '-';
-                        html += `<tr><td class="ps-4 fw-bold text-dark">${dev.name}</td><td>${dev.country}</td><td>${ipH}</td><td class="fw-bold text-success">$${dev.earned.toFixed(2)}</td><td class="text-end pe-4">${sB}</td></tr>`;
+                        html += `<tr><td class="ps-4 fw-bold" style="color:var(--text-dark);">${dev.name}</td><td>${dev.country}</td><td>${ipH}</td><td class="fw-bold text-success">$${dev.earned.toFixed(2)}</td><td class="text-end pe-4">${sB}</td></tr>`;
                     });
                     html += `</tbody></table></div></div></div>`;
                 });
                 document.getElementById('earnappContent').innerHTML = html;
-            } catch (error) {}
+            } catch (error) {
+                console.error(error);
+                document.getElementById('earnappContent').innerHTML = `<div class="text-center py-5 text-danger"><b>Error Render:</b> ${error.message}</div>`;
+            }
         }
     </script>
 </body>
