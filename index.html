@@ -7,7 +7,6 @@
     <link rel="icon" href="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" type="image/png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        /* CSS VARIABLES UNTUK TEMA TERANG & GELAP */
         :root {
             --bg-body: #f4f6f9;
             --bg-surface: #ffffff;
@@ -44,7 +43,6 @@
 
         body { background-color: var(--bg-body); font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text-dark); margin: 0; display: flex; height: 100vh; overflow: hidden; transition: background-color 0.3s, color 0.3s; }
         
-        /* SIDEBAR */
         .sidebar { width: 250px; background-color: var(--bg-surface); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 0; transition: background-color 0.3s, border-color 0.3s; }
         .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
         .sidebar-header img { width: 28px; height: 28px; }
@@ -55,7 +53,6 @@
         .nav-item.active { background-color: var(--nav-active-bg); color: var(--accent-blue); border-right: 3px solid var(--accent-blue); }
         .sidebar-footer { padding: 15px 20px; border-top: 1px solid var(--border-color); font-size: 0.85rem; display: flex; align-items: center; gap: 10px; }
         
-        /* MAIN CONTENT */
         .main-wrapper { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
         .topbar { background-color: var(--bg-surface); height: 60px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 25px; flex-shrink: 0; transition: background-color 0.3s, border-color 0.3s; }
         .topbar-title { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); }
@@ -66,7 +63,6 @@
         
         .content-scroll { padding: 25px; overflow-y: auto; flex-grow: 1; }
         
-        /* CARDS & TABLES */
         .card-summary { background: var(--bg-surface); border-radius: 8px; border: 1px solid var(--border-color); padding: 15px 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); margin-bottom: 20px; transition: background-color 0.3s, border-color 0.3s; }
         .card-top-blue { border-top: 3px solid var(--accent-blue); }
         .card-top-purple { border-top: 3px solid var(--accent-purple); }
@@ -92,8 +88,7 @@
         
         .tab-section { display: none; }
         .tab-section.active { display: block; }
-
-        /* FORM & MODAL ADAPTATION */
+        
         .modal-content { background-color: var(--bg-surface); border-color: var(--border-color); color: var(--text-dark); }
         .form-control, .form-select { background-color: var(--bg-body); color: var(--text-dark); border: 1px solid var(--border-color); }
         .form-control:focus, .form-select:focus { background-color: var(--bg-body); color: var(--text-dark); border-color: var(--accent-blue); box-shadow: none; }
@@ -104,17 +99,17 @@
     <div class="sidebar">
         <div class="sidebar-header">
             <img src="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" alt="Logo">
-            Super Dashboard <span class="version">v2.1</span>
+            Super Dashboard <span class="version">v2.2</span>
         </div>
         <ul class="nav-menu">
             <li class="nav-item active" id="nav-earnapp" onclick="switchTab('earnapp')">
-                🦊 EarnApp Clients
+                <span style="font-size:1.2rem;">🦊</span> EarnApp Clients
             </li>
             <li class="nav-item" id="nav-gost" onclick="switchTab('gost')">
-                🌐 Proxy List
+                <span style="font-size:1.2rem;">🌐</span> Proxy List
             </li>
             <li class="nav-item" data-bs-toggle="modal" data-bs-target="#accModal">
-                ⚙️ Client Setup
+                <span style="font-size:1.2rem;">⚙️</span> Client Setup
             </li>
         </ul>
         <div class="sidebar-footer">
@@ -134,6 +129,13 @@
                 <div class="pill-stat">⏱️ Auto: <select id="refreshInterval" style="border:none; outline:none; font-weight:bold; color:var(--text-muted); background:transparent; cursor:pointer;" onchange="updateRefreshInterval()"><option value="60000">1m</option><option value="120000" selected>2m</option><option value="300000">5m</option><option value="0">Off</option></select></div>
                 <div class="pill-stat pill-green">🟢 Ping: <span id="gostPingDisp">0 ms</span></div>
                 <div class="pill-stat pill-orange">💰 $ <span id="globalBalance">0.00</span></div>
+                
+                <!-- TOMBOL BAHASA KEMBALI -->
+                <select id="langSelector" class="btn-action" style="outline:none; width:auto; border-radius:20px; font-weight:bold; padding: 2px 8px;" onchange="changeLanguage()">
+                    <option value="id">ID 🇮🇩</option>
+                    <option value="en">EN 🇺🇸</option>
+                </select>
+                
                 <button class="btn-action" onclick="fetchAllData()">↻ Refresh</button>
                 <button class="btn-action" id="themeToggleBtn" onclick="toggleTheme()" title="Ganti Tema">🌙</button>
             </div>
@@ -144,7 +146,7 @@
             <!-- EARNAPP SECTION -->
             <div id="sec-earnapp" class="tab-section active">
                 <div id="earnappContent">
-                    <div class="text-center py-5 text-muted">⏳ Menarik data klien EarnApp...</div>
+                    <div class="text-center py-5 text-muted" id="txtLoading">⏳ Menarik data klien EarnApp...</div>
                 </div>
             </div>
 
@@ -164,30 +166,10 @@
 
                 <!-- GOST CARDS SUMMARY -->
                 <div class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <div class="card-summary card-top-blue h-100 mb-0">
-                            <div class="card-label">TOTAL PORT TERISI</div>
-                            <div class="card-value" id="gostTotBinds">0<span class="card-sub">dari pool</span></div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card-summary card-top-purple h-100 mb-0">
-                            <div class="card-label">PORT ONLINE</div>
-                            <div class="card-value text-success" id="gostTotOnline">0<span class="card-sub">aktif</span></div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card-summary card-top-blue h-100 mb-0">
-                            <div class="card-label">FAILOVER AKTIF</div>
-                            <div class="card-value text-warning" id="gostTotFO">0<span class="card-sub">meminjam IP</span></div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card-summary card-top-purple h-100 mb-0">
-                            <div class="card-label">PORT OFFLINE</div>
-                            <div class="card-value text-danger" id="gostTotOff">0<span class="card-sub">LOS/Blocked</span></div>
-                        </div>
-                    </div>
+                    <div class="col-md-3"><div class="card-summary card-top-blue h-100 mb-0"><div class="card-label">TOTAL PORT TERISI</div><div class="card-value" id="gostTotBinds">0<span class="card-sub">dari pool</span></div></div></div>
+                    <div class="col-md-3"><div class="card-summary card-top-purple h-100 mb-0"><div class="card-label">PORT ONLINE</div><div class="card-value text-success" id="gostTotOnline">0<span class="card-sub">aktif</span></div></div></div>
+                    <div class="col-md-3"><div class="card-summary card-top-blue h-100 mb-0"><div class="card-label">FAILOVER AKTIF</div><div class="card-value text-warning" id="gostTotFO">0<span class="card-sub">meminjam IP</span></div></div></div>
+                    <div class="col-md-3"><div class="card-summary card-top-purple h-100 mb-0"><div class="card-label">PORT OFFLINE</div><div class="card-value text-danger" id="gostTotOff">0<span class="card-sub">LOS/Blocked</span></div></div></div>
                 </div>
 
                 <!-- GOST TABLE -->
@@ -195,19 +177,8 @@
                     <div style="padding: 15px 20px; border-bottom: 1px solid var(--border-color); font-weight: 700;">Active Proxy</div>
                     <div class="table-responsive">
                         <table class="clean-table">
-                            <thead>
-                                <tr>
-                                    <th class="ps-4">PORT</th>
-                                    <th>PROXY IP ADDRESS</th>
-                                    <th>PROXY COMMAND</th>
-                                    <th>COUNTRY/REGION</th>
-                                    <th>STATUS</th>
-                                    <th class="text-end pe-4">ACTION</th>
-                                </tr>
-                            </thead>
-                            <tbody id="gostTableBody">
-                                <tr><td colspan="6" class="text-center py-4 text-muted">Mengambil daftar proxy...</td></tr>
-                            </tbody>
+                            <thead><tr><th class="ps-4">PORT</th><th>PROXY IP ADDRESS</th><th>PROXY COMMAND</th><th>COUNTRY/REGION</th><th>STATUS</th><th class="text-end pe-4">ACTION</th></tr></thead>
+                            <tbody id="gostTableBody"><tr><td colspan="6" class="text-center py-4 text-muted" id="txtLoadingGost">Mengambil daftar proxy...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -220,10 +191,7 @@
     <div class="modal fade" id="accModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content shadow">
-                <div class="modal-header border-bottom-0 pb-0">
-                    <h5 class="modal-title fw-bold">Client Setup (Accounts)</h5>
-                    <button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button>
-                </div>
+                <div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Client Setup (Accounts)</h5><button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <form action="/add_account" method="POST" class="mb-4">
                         <label class="card-label">Tambah Akun</label>
@@ -235,10 +203,7 @@
                     <table class="table table-sm align-middle" style="color: var(--text-dark);">
                         <tbody>
                             {% for acc in accounts %}
-                            <tr>
-                                <td class="fw-semibold">{{ acc[1] }}</td>
-                                <td class="text-end"><a href="/delete_account/{{ acc[0] }}" class="btn-action text-danger text-decoration-none">Hapus</a></td>
-                            </tr>
+                            <tr><td class="fw-semibold">{{ acc[1] }}</td><td class="text-end"><a href="/delete_account/{{ acc[0] }}" class="btn-action text-danger text-decoration-none">Hapus</a></td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -251,10 +216,7 @@
     <div class="modal fade" id="gostZoneModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content shadow">
-                <div class="modal-header border-bottom-0 pb-0">
-                    <h5 class="modal-title fw-bold">Pengaturan Zona</h5>
-                    <button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button>
-                </div>
+                <div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Pengaturan Zona</h5><button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <label class="card-label">Daftar Zona Aktif (Pisahkan koma)</label>
                     <textarea id="zoneEditorInput" class="form-control form-control-sm mb-3" rows="2"></textarea>
@@ -268,10 +230,7 @@
     <div class="modal fade" id="gostPoolModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content shadow">
-                <div class="modal-header border-bottom-0 pb-0">
-                    <h5 class="modal-title fw-bold">Entry Proxy (Zona <span id="poolZoneName"></span>)</h5>
-                    <button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button>
-                </div>
+                <div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Entry Proxy (Zona <span id="poolZoneName"></span>)</h5><button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <div class="d-flex gap-2 mb-3">
                         <textarea id="newPoolProxies" class="form-control form-control-sm" rows="1" placeholder="host:port:user:pass"></textarea>
@@ -292,10 +251,7 @@
     <div class="modal fade" id="gostTopModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content shadow">
-                <div class="modal-header border-bottom-0 pb-0">
-                    <h5 class="modal-title fw-bold">Top Proxy Data</h5>
-                    <button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button>
-                </div>
+                <div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Top Proxy Data</h5><button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <div style="max-height: 350px; overflow-y: auto;">
                         <table class="clean-table">
@@ -318,9 +274,12 @@
         let gostSettings = {};
 
         document.addEventListener("DOMContentLoaded", () => {
-            // THEME INITIALIZATION
             const savedTheme = localStorage.getItem('earnapp_theme') || 'light';
             applyTheme(savedTheme);
+
+            const savedLang = localStorage.getItem('earnapp_lang') || 'id';
+            document.getElementById('langSelector').value = savedLang;
+            updateLangText(savedLang);
 
             poolModalInst = new bootstrap.Modal(document.getElementById('gostPoolModal'));
             topModalInst = new bootstrap.Modal(document.getElementById('gostTopModal'));
@@ -333,33 +292,51 @@
             fetchAllData();
         });
 
-        // ==================== THEME TOGGLE LOGIC ====================
+        // ==================== TEMA & BAHASA ====================
         function applyTheme(theme) {
             document.documentElement.setAttribute('data-theme', theme);
             localStorage.setItem('earnapp_theme', theme);
             document.getElementById('themeToggleBtn').innerText = theme === 'dark' ? '☀️' : '🌙';
             document.getElementById('themeToggleBtn').title = theme === 'dark' ? 'Mode Terang' : 'Mode Gelap';
+            document.documentElement.style.setProperty('--btn-close-filter', theme === 'dark' ? 'invert(1) grayscale(100%) brightness(200%)' : 'none');
+        }
+        function toggleTheme() { applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+
+        function changeLanguage() {
+            const l = document.getElementById('langSelector').value;
+            localStorage.setItem('earnapp_lang', l);
+            updateLangText(l);
+            fetchAllData();
+        }
+
+        function updateLangText(l) {
+            const isEn = l === 'en';
+            const navT = isEn ? 'EarnApp Clients' : 'Klien EarnApp';
+            const gostT = isEn ? 'Proxy List' : 'Daftar Proxy';
+            document.getElementById('nav-earnapp').innerHTML = `<span style="font-size:1.2rem;">🦊</span> ${navT}`;
+            document.getElementById('nav-gost').innerHTML = `<span style="font-size:1.2rem;">🌐</span> ${gostT}`;
             
-            if (theme === 'dark') {
-                document.documentElement.style.setProperty('--btn-close-filter', 'invert(1) grayscale(100%) brightness(200%)');
-            } else {
-                document.documentElement.style.setProperty('--btn-close-filter', 'none');
-            }
+            const titleEl = document.getElementById('pageTitle');
+            if(titleEl.innerText.includes('EarnApp')) titleEl.innerText = isEn ? 'Client : EarnApp Nodes' : 'Klien : Node EarnApp';
+            else titleEl.innerText = isEn ? 'Proxy List : Active Proxy' : 'Daftar Proxy : Proxy Aktif';
+
+            const l_earn = document.getElementById('txtLoading');
+            if(l_earn) l_earn.innerText = isEn ? '⏳ Harvesting EarnApp client data...' : '⏳ Sedang memanen data klien EarnApp...';
+            
+            const l_gost = document.getElementById('txtLoadingGost');
+            if(l_gost) l_gost.innerText = isEn ? 'Fetching proxy list...' : 'Mengambil daftar proxy...';
         }
 
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-            applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
-        }
-
+        // ==================== NAVIGASI & REFRESH ====================
         function switchTab(tabId) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-section').forEach(el => el.classList.remove('active'));
-            
             document.getElementById(`nav-${tabId}`).classList.add('active');
             document.getElementById(`sec-${tabId}`).classList.add('active');
             
-            document.getElementById('pageTitle').innerText = tabId === 'earnapp' ? 'Client : EarnApp Nodes' : 'Proxy List : Active Proxy';
+            const isEn = document.getElementById('langSelector').value === 'en';
+            if(tabId === 'earnapp') document.getElementById('pageTitle').innerText = isEn ? 'Client : EarnApp Nodes' : 'Klien : Node EarnApp';
+            else document.getElementById('pageTitle').innerText = isEn ? 'Proxy List : Active Proxy' : 'Daftar Proxy : Proxy Aktif';
             
             if (tabId === 'gost') fetchGostStats();
             else fetchEarnAppStats();
@@ -369,13 +346,11 @@
             localStorage.setItem('earnapp_refresh_interval', document.getElementById('refreshInterval').value);
             startRefreshTimer();
         }
-
         function startRefreshTimer() {
             if (refreshTimer) clearInterval(refreshTimer);
             const v = parseInt(document.getElementById('refreshInterval').value);
             if (v > 0) refreshTimer = setInterval(fetchAllData, v);
         }
-
         function fetchAllData() {
             if (document.getElementById('sec-gost').classList.contains('active')) fetchGostStats();
             else fetchEarnAppStats();
@@ -395,16 +370,16 @@
                 if (!res.ok || !data.success) throw new Error("API GOST belum merespon.");
                 
                 gostSettings = data.settings || {};
-                
                 const zs = document.getElementById('gostZoneSelect');
                 const zones = (gostSettings.ZONES || "1081-1090").split(",").map(x => x.trim()).filter(x => x);
                 if (zs.options.length !== zones.length || !zones.includes(zs.value)) {
-                    zs.innerHTML = '';
-                    zones.forEach(z => zs.add(new Option(`Zone ${z}`, z)));
-                    currentGostZone = zones[0];
+                    zs.innerHTML = ''; zones.forEach(z => zs.add(new Option(`Zone ${z}`, z))); currentGostZone = zones[0];
                 } else { currentGostZone = zs.value; }
 
-                if (gostSettings.PING_TARGET) document.getElementById('gostPingDisp').innerText = `${gostSettings.PING_TARGET}`;
+                if (gostSettings.PING_TARGET) {
+                    const elPing = document.getElementById('gostPingDisp');
+                    if(elPing) elPing.innerText = `${gostSettings.PING_TARGET}`;
+                }
                 
                 const btnFO = document.getElementById('btnGostFO');
                 if (gostSettings.AUTO_FAILOVER === "1") { btnFO.classList.add("btn-green"); btnFO.innerText = "Failover: ON"; }
@@ -421,12 +396,11 @@
                 let totBinds=0, totOn=0, totFo=0, totOff=0;
 
                 if (my_px.length === 0) {
-                    html = '<tr><td colspan="7" class="text-center py-4 text-muted">Belum ada data port di zona ini.</td></tr>';
+                    html = '<tr><td colspan="6" class="text-center py-4 text-muted">Belum ada port di zona ini. Cek "⚙️ Zona".</td></tr>';
                 } else {
                     my_px.forEach(p => {
                         let st = p.status || "";
                         let statusText = `<span style="color:var(--text-muted);"><span class="status-dot dot-off"></span>OFFLINE</span>`;
-                        
                         if (st.includes('Online')) { statusText = `<span style="color:var(--badge-green-text); font-weight:700;"><span class="status-dot dot-on"></span>ONLINE</span>`; totOn++; totBinds++; }
                         else if (st.includes('Failover')) { statusText = `<span style="color:#f39c12; font-weight:700;"><span class="status-dot" style="background:#f39c12;"></span>FAILOVER</span>`; totFo++; totBinds++; }
                         else if (st.includes('Checking') || st.includes('Memeriksa')) { statusText = `<span class="text-muted">CHECKING...</span>`; totBinds++; }
@@ -435,20 +409,11 @@
                         
                         let short_proxy = p.proxy || "-";
                         if(short_proxy.length > 25) short_proxy = short_proxy.substring(0, 25) + '...';
-
                         let ipCol = p.ip !== "-" ? `<span class="badge-ip">${p.ip}</span> <span class="badge-tag" style="background:var(--accent-blue);color:#fff;">1000</span>` : "-";
-
                         let btnAction = `<button class="btn-action text-danger" onclick="bindPort('${p.port}', '')">Unbind</button>`;
                         if(st.includes('Free')) btnAction = `<button class="btn-action text-primary" onclick="showPoolModal('${p.port}')">Bind</button>`;
 
-                        html += `<tr>
-                            <td class="ps-4 fw-bold" style="color:var(--text-dark);">${p.port}</td>
-                            <td>${ipCol}</td>
-                            <td class="font-monospace text-muted" style="font-size:0.75rem;">${short_proxy}</td>
-                            <td>${p.location}</td>
-                            <td>${statusText}</td>
-                            <td class="text-end pe-4">${btnAction}</td>
-                        </tr>`;
+                        html += `<tr><td class="ps-4 fw-bold" style="color:var(--text-dark);">${p.port}</td><td>${ipCol}</td><td class="font-monospace text-muted" style="font-size:0.75rem;">${short_proxy}</td><td>${p.location}</td><td>${statusText}</td><td class="text-end pe-4">${btnAction}</td></tr>`;
                     });
                 }
                 
@@ -456,10 +421,9 @@
                 document.getElementById('gostTotOnline').innerHTML = `${totOn}<span class="card-sub">aktif normal</span>`;
                 document.getElementById('gostTotFO').innerHTML = `${totFo}<span class="card-sub">IP pengganti</span>`;
                 document.getElementById('gostTotOff').innerHTML = `${totOff}<span class="card-sub">putus koneksi</span>`;
-                
                 document.getElementById('gostTableBody').innerHTML = html;
             } catch (e) {
-                document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="7" class="text-center py-4 text-danger">Backend Error: ${e.message}</td></tr>`;
+                document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">Backend Error: ${e.message}</td></tr>`;
             }
         }
 
@@ -498,9 +462,7 @@
             const res = await reqGost("top");
             if (res.success) {
                 let html = '';
-                res.top.forEach((t, i) => {
-                    html += `<tr><td>${i+1}</td><td class="fw-bold" style="color:var(--text-dark);">${t.ip}</td><td>${t.location}</td><td class="text-end fw-bold">${t.peak}</td></tr>`;
-                });
+                res.top.forEach((t, i) => { html += `<tr><td>${i+1}</td><td class="fw-bold" style="color:var(--text-dark);">${t.ip}</td><td>${t.location}</td><td class="text-end fw-bold">${t.peak}</td></tr>`; });
                 document.getElementById('topTableBody').innerHTML = html; topModalInst.show();
             }
         }
@@ -512,20 +474,17 @@
                 if (res.status === 401 || res.redirected) { window.location.href = '/login'; return; }
                 const data = await res.json();
                 
-                if(document.getElementById('globalBalance')) {
-                    document.getElementById('globalBalance').innerText = (data.total_balance || 0).toFixed(2);
-                }
-
+                // FIXED NULL REFERENCE BY ADDING SAFE CHECKS
+                const eBal = document.getElementById('globalBalance'); if(eBal) eBal.innerText = (data.total_balance || 0).toFixed(2);
+                
                 if (!data.accounts || data.accounts.length === 0) {
-                    document.getElementById('earnappContent').innerHTML = `<div class="text-center py-5 text-muted">Belum ada klien terdaftar. Klik "⚙️ Client Setup" di kiri.</div>`; return;
+                    const isEn = document.getElementById('langSelector').value === 'en';
+                    document.getElementById('earnappContent').innerHTML = `<div class="text-center py-5 text-muted">${isEn ? 'No clients yet. Click "⚙️ Client Setup" on the left.' : 'Belum ada klien terdaftar. Klik "⚙️ Client Setup" di kiri.'}</div>`; return;
                 }
 
                 let html = '';
                 data.accounts.forEach(acc => {
-                    if (acc.error) {
-                        html += `<div class="card-summary border-danger mb-4"><h6 class="text-danger mb-0">Error Client ${acc.name}: ${acc.error}</h6></div>`;
-                        return;
-                    }
+                    if (acc.error) { html += `<div class="card-summary border-danger mb-4"><h6 class="text-danger mb-0">Error Client ${acc.name}: ${acc.error}</h6></div>`; return; }
                     
                     html += `
                     <div class="mb-5">
