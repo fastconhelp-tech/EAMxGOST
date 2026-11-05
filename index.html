@@ -125,7 +125,6 @@
                 <div id="earnappContent"><div class="text-center py-5 text-muted" id="txtLoading" data-i18n="loadE">⏳ Menarik data klien EarnApp...</div></div>
             </div>
 
-            <!-- HALAMAN ENTRY PROXY -->
             <div id="sec-gost-entry" class="tab-section">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div class="d-flex align-items-center gap-3">
@@ -239,7 +238,6 @@
         </div>
     </div>
 
-    <!-- MODAL PILIH PORT KOSONG (UNTUK ENTRY PROXY) -->
     <div class="modal fade" id="gostPickPortModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content shadow"><div class="modal-header border-bottom-0 pb-0"><h5 class="modal-title fw-bold">Pilih Port Kosong</h5><button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button></div>
@@ -299,7 +297,7 @@
 
         let currentLang = localStorage.getItem('earnapp_lang') || 'id';
         let refreshTimer = null;
-        let zoneModalInst = null, pickPortModalInst = null, topModalInst = null;
+        let zoneModalInst = null, pickPortModalInst = null;
         let currentGostZone = "";
         let gostSettings = {};
         let emptyPortsGlob = []; 
@@ -385,7 +383,7 @@
                 
                 let html = '';
                 const my_px = data.proxies.filter(x => { const sp = parseInt(x.port); return sp >= parseInt(currentGostZone.split("-")[0]) && sp <= parseInt(currentGostZone.split("-")[1]); });
-                let totBinds=0, totOn=0, totFo=0, totOff=0;
+                let totBinds=0, totOn=0, totFo=0;
                 emptyPortsGlob = []; // RESET DAFTAR PORT KOSONG
 
                 if (my_px.length === 0) {
@@ -400,7 +398,7 @@
                         else if (st.includes('Failover')) { statusText = `<span style="color:#f39c12; font-weight:700;">FAILOVER</span>`; totFo++; totBinds++; pingText = `<span style="color:#f39c12; font-weight:600;">30 ms</span>`;}
                         else if (st.includes('Checking') || st.includes('Memeriksa')) { statusText = `<span class="text-muted">${T.tChk}</span>`; totBinds++; }
                         else if (st.includes('Free')) { statusText = `<span class="text-muted">-</span>`; emptyPortsGlob.push(p.port); }
-                        else { totOff++; totBinds++; }
+                        else { totBinds++; }
                         
                         let short_proxy = p.proxy || "-"; if(short_proxy.length > 25) short_proxy = short_proxy.substring(0, 25) + '...';
                         let ipCol = p.ip !== "-" ? `<span class="badge-ip">${p.ip}</span> <span class="badge-tag" style="background:#2c3e50;color:#fff;">1000</span>` : "-";
@@ -423,9 +421,11 @@
                     });
                 }
                 
-                document.getElementById('tBnd').innerText = totBinds; document.getElementById('tOn').innerText = totOn; document.getElementById('tFo').innerText = totFo;
-                document.getElementById('gostTotBinds').innerHTML = `${totBinds}<span class="card-sub">${T.dariP}</span>`; document.getElementById('gostTotOnline').innerHTML = `${totOn}<span class="card-sub">${T.akN}</span>`; document.getElementById('gostTotFO').innerHTML = `${totFo}<span class="card-sub">${T.pinJ}</span>`; document.getElementById('gostTotOff').innerHTML = `${totOff}<span class="card-sub">${T.losB}</span>`;
-                document.getElementById('gostTableBody').innerHTML = html;
+                // MENGGUNAKAN SAFE NULL CHECK UNTUK ELEMEN YANG ADA DI LAYAR
+                const eTb = document.getElementById('tBnd'); if(eTb) eTb.innerText = totBinds; 
+                const eTo = document.getElementById('tOn'); if(eTo) eTo.innerText = totOn; 
+                const eTf = document.getElementById('tFo'); if(eTf) eTf.innerText = totFo;
+                const eB = document.getElementById('gostTableBody'); if(eB) eB.innerHTML = html;
             } catch (e) { document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="10" class="text-center py-4 text-danger">${i18n[currentLang].errGost} ${e.message}</td></tr>`; }
         }
 
@@ -442,23 +442,23 @@
                 let html = '';
                 res.pool.forEach(p => {
                     let st = p.ip || "";
-                    let isChecking = st.includes('Checking') || st.includes('Memeriksa');
-                    let isError = st.includes('Timeout') || st.includes('Error') || st.includes('Failed') || st.includes('Blocked');
+                    let isChk = st.includes('Checking') || st.includes('Memeriksa');
+                    let isErr = st.includes('Timeout') || st.includes('Error') || st.includes('Failed') || st.includes('Blocked') || st.includes('Unknown');
                     
-                    let b = p.bound_to ? `<span style="color:var(--text-muted);">Terkait Port ${p.bound_to}</span>` : `<span class="text-success">${T.tFree}</span>`;
+                    let statPort = p.bound_to ? `<span style="color:var(--text-muted);">Port ${p.bound_to}</span>` : `<span class="text-success">${T.tFree}</span>`;
                     
                     let ipTarget = `<span class="text-muted">${st}</span>`;
-                    if(isChecking) { ipTarget = `<span class="text-warning">${T.tChk}</span>`; }
-                    else if(isError) { ipTarget = `<span class="badge-off">${T.tOffl}</span>`; }
+                    if(isChk) { ipTarget = `<span class="text-warning">${T.tChk}</span>`; }
+                    else if(isErr) { ipTarget = `<span class="badge-off">${T.tOffl}</span>`; }
                     else if(st !== "-") { ipTarget = `<span class="badge-ip">${st}</span>`; }
                     
                     let act = '';
-                    if(!p.bound_to && !isChecking && !isError && st !== "-") {
+                    if(!p.bound_to && !isChk && !isErr && st !== "-") {
                         act = `<button class="btn-action text-primary" style="padding:2px 6px;" onclick="openPickPortModal('${p.proxy}')">${T.bUse}</button> `;
                     }
                     act += `<button class="btn-icon" title="Hapus dari Pool" onclick="delPoolProxy('${p.proxy}')">🗑️</button>`;
                     
-                    html += `<tr><td class="ps-4 font-monospace text-muted" style="font-size:0.75rem;">${p.proxy}</td><td>${ipTarget}</td><td class="fw-bold">${b}</td><td class="text-end pe-4">${act}</td></tr>`;
+                    html += `<tr><td class="ps-4 font-monospace text-muted" style="font-size:0.75rem;">${p.proxy}</td><td>${ipTarget}</td><td class="fw-bold">${statPort}</td><td class="text-end pe-4">${act}</td></tr>`;
                 });
                 document.getElementById('poolPageTableBody').innerHTML = html;
             }
@@ -469,32 +469,27 @@
             const container = document.getElementById('emptyPortsContainer');
             container.innerHTML = '';
             
-            if(emptyPortsGlob.length === 0) {
-                container.innerHTML = '<div class="alert alert-warning w-100 py-2">Semua port di zona ini sudah terisi.</div>';
-            } else {
-                emptyPortsGlob.forEach(port => {
-                    container.innerHTML += `<button class="btn-action" style="font-size:0.9rem;" onclick="executePickPort('${port}')">${port}</button>`;
-                });
-            }
+            if(emptyPortsGlob.length === 0) { container.innerHTML = '<div class="alert alert-warning w-100 py-2">Semua port di zona ini sudah terisi.</div>'; } 
+            else { emptyPortsGlob.forEach(port => { container.innerHTML += `<button class="btn-action" style="font-size:0.9rem;" onclick="executePickPort('${port}')">${port}</button>`; }); }
             pickPortModalInst.show();
         }
 
         async function executePickPort(port) { const prx = document.getElementById('tempProxyToBind').value; await bindPort(port, prx); pickPortModalInst.hide(); }
 
-        // ENTRY PROXY METHODS
+        // DRAG & DROP IMPORT
         function setupDragAndDrop() {
             const dropZone = document.getElementById('dropZone'); const fileInput = document.getElementById('excelFileInput');
             dropZone.addEventListener('click', () => fileInput.click());
             dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent-blue)'; dropZone.style.backgroundColor = 'var(--nav-active-bg)'; });
             dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--border-color)'; dropZone.style.backgroundColor = 'var(--bg-body)'; });
-            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--border-color)'; dropZone.style.backgroundColor = 'var(--bg-body)'; if (e.dataTransfer.files.length > 0) { fileInput.files = e.dataTransfer.files; updateFileName(); } });
-            fileInput.addEventListener('change', updateFileName);
+            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--border-color)'; dropZone.style.backgroundColor = 'var(--bg-body)'; if (e.dataTransfer.files.length > 0) { fileInput.files = e.dataTransfer.files; document.getElementById('fileNameTxt').innerText = fileInput.files[0].name; } });
+            fileInput.addEventListener('change', () => { if (fileInput.files.length > 0) document.getElementById('fileNameTxt').innerText = fileInput.files[0].name; });
         }
-        function updateFileName() { const fi = document.getElementById('excelFileInput'); if (fi.files.length > 0) document.getElementById('fileNameTxt').innerText = fi.files[0].name; }
         function clearFile() { document.getElementById('excelFileInput').value = ''; document.getElementById('fileNameTxt').innerText = i18n[currentLang].pMtd1Btn; }
         
         async function uploadExcel() {
-            const fi = document.getElementById('excelFileInput'); const btn = document.getElementById('btnUploadExcel');
+            const fi = document.getElementById('excelFileInput');
+            const btn = document.getElementById('btnUploadExcel');
             if (fi.files.length === 0) return alert("Pilih file terlebih dahulu!");
             btn.innerText = "⏳ Importing..."; btn.disabled = true;
             const formData = new FormData(); formData.append('file', fi.files[0]); formData.append('zone', currentGostZone);
@@ -517,18 +512,16 @@
         }
         async function delPoolProxy(prx) { await reqGost("del_pool", {zone: currentGostZone, proxy: prx}); fetchPoolTable(); }
 
-        // ZONE & GENERAL
         function showZoneManagerModal() { document.getElementById('zoneEditorInput').value = gostSettings.ZONES || "1081-1090"; zoneModalInst.show(); }
         async function saveZones() { const rZ = document.getElementById('zoneEditorInput').value; const nZ = rZ.split(',').map(x => x.trim()).filter(x => x && x.includes('-')).join(','); if (nZ) { const res = await reqGost("update_zones", {zones: nZ}); if (res.success) { zoneModalInst.hide(); document.getElementById('gostZoneSelect').innerHTML = ''; fetchGostStats(); } } }
         function toggleGostFailover() { updateGostSetting("AUTO_FAILOVER", gostSettings.AUTO_FAILOVER === "1" ? "0" : "1"); }
         async function updateGostSetting(k, v) { await reqGost("settings", {key: k, value: v}); fetchGostStats(); }
         async function bindPort(port, prx) { await reqGost("bind", {zone: currentGostZone, port: port, proxy: prx}); fetchGostStats(); fetchPoolTable(); }
         
-        // ==================== EARNAPP LOGIC (FIXED ABORT CONTROLLER) ====================
+        // ==================== EARNAPP LOGIC ====================
         async function fetchEarnAppStats() {
             let T = i18n[currentLang];
             try {
-                // MENCEGAH LOADING MACET: Paksa putus koneksi jika lebih dari 12 detik!
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 12000);
                 
@@ -563,7 +556,7 @@
                 });
                 document.getElementById('earnappContent').innerHTML = html;
             } catch (error) {
-                let msg = error.name === 'AbortError' ? "Koneksi ke sistem EarnApp terputus (Timeout). IP Anda mungkin sedang diblokir Cloudflare EarnApp." : error.message;
+                let msg = error.name === 'AbortError' ? "Koneksi ke sistem EarnApp terputus (Timeout). IP Anda mungkin sedang diblokir Cloudflare." : error.message;
                 document.getElementById('earnappContent').innerHTML = `<div class="text-center py-5 text-danger"><b>Error Modul Klien:</b> ${msg}</div>`; 
             }
         }
