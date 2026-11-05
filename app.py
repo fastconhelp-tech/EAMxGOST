@@ -247,8 +247,6 @@ def api_gost_full():
         except: pass
 
         ipc, lst, prf = load_j("ip_cache.json"), load_j("live_status.json"), load_j("proxy_performance.json")
-        
-        # MENGELUARKAN SEMUA PORT (TERMASUK YANG KOSONG) BERDASARKAN RENTANG ZONA
         bnd = {}
         all_zone_ports = []
         zones_raw = sts.get("ZONES", "1081-1090").split(",")
@@ -291,7 +289,6 @@ def api_gost_proxy_action():
         elif act == "bind": return jsonify(requests.post(f"{GOST_API_URL}/api/bind", json=req, timeout=5).json())
         elif act == "settings": return jsonify(requests.post(f"{GOST_API_URL}/api/settings", json=req, timeout=5).json())
         elif act == "top": return jsonify(requests.get(f"{GOST_API_URL}/api/top", timeout=5).json())
-        # TAMBAHAN UNTUK HAPUS ZONA & TAMBAH ZONA
         elif act == "update_zones":
             new_zones = req.get("zones")
             if not new_zones: return jsonify({"success": False})
@@ -310,6 +307,36 @@ def api_gost_proxy_action():
             return jsonify({"success": True, "message": "Zona diperbarui."})
     except Exception as e: return jsonify({"success": False, "message": str(e)})
     return jsonify({"success": False})
+
+# API BARU: UPLOAD EXCEL / CSV
+@app.route('/api/upload_excel', methods=['POST'])
+@login_required
+def upload_excel():
+    if 'file' not in request.files: return jsonify({"success": False, "message": "Tidak ada file."})
+    file = request.files['file']
+    zone = request.form.get('zone')
+    if not file.filename or not zone: return jsonify({"success": False, "message": "File atau zona kosong."})
+    
+    try:
+        import pandas as pd
+        if file.filename.endswith('.csv'): df = pd.read_csv(file)
+        else: df = pd.read_excel(file)
+        
+        proxies = []
+        if 'Proxy Command' in df.columns:
+            proxies = df['Proxy Command'].dropna().astype(str).tolist()
+        else:
+            for col in df.columns:
+                for val in df[col].dropna().astype(str):
+                    if ':' in val and len(val.split(':')) >= 3: proxies.append(val)
+        
+        proxies = [p.strip() for p in proxies if p.strip()]
+        if not proxies: return jsonify({"success": False, "message": "Kolom 'Proxy Command' tidak ditemukan."})
+        
+        res = requests.post(f"{GOST_API_URL}/api/pool/add", json={"zone": zone, "proxies": proxies}, timeout=5)
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Server Error: {str(e)}. Pastikan library 'pandas' & 'openpyxl' terinstal."})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
