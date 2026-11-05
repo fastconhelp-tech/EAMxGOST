@@ -94,7 +94,7 @@ def api_withdraw():
     headers = get_headers(row[1])
     try:
         bal = float(requests.get("https://earnapp.com/dashboard/api/money?appid=earnapp", headers=headers, timeout=12).json().get('balance', 0) or 0)
-        if bal < 2.5: return jsonify({"success": False, "message": f"Saldo minimal $2.50."}), 400
+        if bal < 2.5: return jsonify({"success": False, "message": f"Saldo minimal \$2.50."}), 400
         res = requests.post("https://earnapp.com/dashboard/api/redeem?appid=earnapp", headers=headers, json={"to": email, "payment_method": method}, timeout=15)
         return jsonify({"success": res.status_code == 200, "message": "Berhasil dicairkan." if res.status_code==200 else "Ditolak EarnApp."})
     except Exception as e: return jsonify({"success": False, "message": str(e)}), 500
@@ -247,22 +247,36 @@ def api_gost_full():
         except: pass
 
         ipc, lst, prf = load_j("ip_cache.json"), load_j("live_status.json"), load_j("proxy_performance.json")
+        
+        # MENGELUARKAN SEMUA PORT (TERMASUK YANG KOSONG) BERDASARKAN RENTANG ZONA
         bnd = {}
-        for z in sts.get("ZONES", "1081-1090").split(","):
+        all_zone_ports = []
+        zones_raw = sts.get("ZONES", "1081-1090").split(",")
+        for z in zones_raw:
+            z = z.strip()
+            if "-" in z:
+                try:
+                    s, e = map(int, z.split("-"))
+                    all_zone_ports.extend(range(s, e + 1))
+                except: pass
             try:
-                with open(os.path.join(GOST_DIR, f"binds_{z.strip()}.txt"), "r") as f:
+                with open(os.path.join(GOST_DIR, f"binds_{z}.txt"), "r") as f:
                     for l in f:
-                        if "|" in l: p, prx = l.strip().split("|", 1); bnd[p] = prx
+                        if "|" in l: p, prx = l.strip().split("|", 1); bnd[int(p)] = prx
             except: pass
 
         plist = []
-        for p, prx in bnd.items():
-            ip = ipc.get(prx, "-") if isinstance(ipc, dict) else "-"
-            loc = prf.get(ip, {}).get("location", "-") if isinstance(prf, dict) and isinstance(prf.get(ip), dict) else "-"
-            st = lst.get(prx, "Offline") if isinstance(lst, dict) else "Offline"
-            plist.append({"port": str(p), "proxy": str(prx), "ip": str(ip), "location": str(loc), "status": str(st)})
+        for p in all_zone_ports:
+            if p in bnd:
+                prx = bnd[p]
+                ip = ipc.get(prx, "-") if isinstance(ipc, dict) else "-"
+                loc = prf.get(ip, {}).get("location", "-") if isinstance(prf, dict) and isinstance(prf.get(ip), dict) else "-"
+                st = lst.get(prx, "Offline") if isinstance(lst, dict) else "Offline"
+                plist.append({"port": str(p), "proxy": str(prx), "ip": str(ip), "location": str(loc), "status": str(st)})
+            else:
+                plist.append({"port": str(p), "proxy": "", "ip": "-", "location": "-", "status": "Free"})
         
-        return jsonify({"success": True, "settings": sts, "proxies": sorted(plist, key=lambda x: int(x["port"]) if x["port"].isdigit() else 999)})
+        return jsonify({"success": True, "settings": sts, "proxies": sorted(plist, key=lambda x: int(x["port"]))})
     except Exception as e: return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/api/gost/proxy_action', methods=['POST'])
@@ -277,6 +291,23 @@ def api_gost_proxy_action():
         elif act == "bind": return jsonify(requests.post(f"{GOST_API_URL}/api/bind", json=req, timeout=5).json())
         elif act == "settings": return jsonify(requests.post(f"{GOST_API_URL}/api/settings", json=req, timeout=5).json())
         elif act == "top": return jsonify(requests.get(f"{GOST_API_URL}/api/top", timeout=5).json())
+        # TAMBAHAN UNTUK HAPUS ZONA & TAMBAH ZONA
+        elif act == "update_zones":
+            new_zones = req.get("zones")
+            if not new_zones: return jsonify({"success": False})
+            with open(os.path.join(GOST_DIR, "settings.conf"), "r") as f: lines = f.readlines()
+            with open(os.path.join(GOST_DIR, "settings.conf"), "w") as f:
+                found = False
+                for l in lines:
+                    if l.startswith("ZONES="): f.write(f"ZONES={new_zones}\n"); found = True
+                    else: f.write(l)
+                if not found: f.write(f"ZONES={new_zones}\n")
+            for z in new_zones.split(","):
+                z = z.strip()
+                p_file, b_file = os.path.join(GOST_DIR, f"pool_{z}.txt"), os.path.join(GOST_DIR, f"binds_{z}.txt")
+                if not os.path.exists(p_file): open(p_file, 'a').close()
+                if not os.path.exists(b_file): open(b_file, 'a').close()
+            return jsonify({"success": True, "message": "Zona diperbarui."})
     except Exception as e: return jsonify({"success": False, "message": str(e)})
     return jsonify({"success": False})
 
