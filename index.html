@@ -1,201 +1,285 @@
 <!DOCTYPE html>
-<html lang="id" data-bs-theme="dark">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Dashboard</title>
     <link rel="icon" href="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" type="image/png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { background-color: #181825; color: #cdd6f4; font-family: 'Segoe UI', system-ui, sans-serif; }
-        .card { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); }
-        .stat-pill { background-color: #313244; border-radius: 8px; height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
-        .chart-box { background-color: #181825; border: 1px solid #313244; border-radius: 12px; padding: 12px; height: 220px; position: relative; }
-        .table-container { max-height: 400px; overflow-y: auto; border-radius: 10px; border: 1px solid #313244; }
-        .table-dark { --bs-table-bg: #181825; --bs-table-striped-bg: #1e1e2e; margin-bottom: 0; }
-        .ip-chip { display: inline-block; margin: 2px 4px 2px 0; font-family: monospace; font-size: 0.85rem; }
-        .badge-online { background-color: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid #a6e3a1; }
-        .badge-offline { background-color: rgba(243, 139, 168, 0.15); color: #f38ba8; border: 1px solid #f38ba8; }
-        .badge-blocked { background-color: rgba(250, 179, 135, 0.18); color: #fab387; border: 1px solid #fab387; font-weight: bold; }
-        .btn-withdraw { background-color: #a6e3a1; color: #11111b; font-weight: 600; border: none; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #181825; }
-        ::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
-        .nav-pills .nav-link { color: #a6adc8; border-radius: 8px; }
-        .nav-pills .nav-link.active { background-color: #89b4fa; color: #11111b; }
+        /* CSS VARIABLES UNTUK TEMA TERANG & GELAP */
+        :root {
+            --bg-body: #f4f6f9;
+            --bg-surface: #ffffff;
+            --text-dark: #2c3e50;
+            --text-muted: #7f8c8d;
+            --border-color: #ecf0f1;
+            --accent-blue: #3498db;
+            --accent-purple: #9b59b6;
+            --badge-green: #eafaf1;
+            --badge-green-text: #27ae60;
+            --badge-red: #fdedec;
+            --badge-red-text: #e74c3c;
+            --table-hover: #f8f9fa;
+            --nav-active-bg: #ebf5fb;
+            --pill-bg: #ffffff;
+        }
+
+        [data-theme="dark"] {
+            --bg-body: #11111b;
+            --bg-surface: #1e1e2e;
+            --text-dark: #cdd6f4;
+            --text-muted: #a6adc8;
+            --border-color: #313244;
+            --accent-blue: #89b4fa;
+            --accent-purple: #cba6f7;
+            --badge-green: rgba(166, 227, 161, 0.15);
+            --badge-green-text: #a6e3a1;
+            --badge-red: rgba(243, 139, 168, 0.15);
+            --badge-red-text: #f38ba8;
+            --table-hover: #181825;
+            --nav-active-bg: rgba(137, 180, 250, 0.15);
+            --pill-bg: #181825;
+        }
+
+        body { background-color: var(--bg-body); font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text-dark); margin: 0; display: flex; height: 100vh; overflow: hidden; transition: background-color 0.3s, color 0.3s; }
+        
+        /* SIDEBAR */
+        .sidebar { width: 250px; background-color: var(--bg-surface); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 0; transition: background-color 0.3s, border-color 0.3s; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+        .sidebar-header img { width: 28px; height: 28px; }
+        .sidebar-header .version { font-size: 0.7rem; background: var(--bg-body); padding: 2px 6px; border-radius: 12px; color: var(--text-muted); font-weight: 600; margin-left: auto; }
+        .nav-menu { list-style: none; padding: 15px 0; margin: 0; flex-grow: 1; }
+        .nav-item { padding: 10px 20px; cursor: pointer; color: var(--text-muted); font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 12px; transition: 0.2s; }
+        .nav-item:hover { background-color: var(--table-hover); color: var(--text-dark); }
+        .nav-item.active { background-color: var(--nav-active-bg); color: var(--accent-blue); border-right: 3px solid var(--accent-blue); }
+        .sidebar-footer { padding: 15px 20px; border-top: 1px solid var(--border-color); font-size: 0.85rem; display: flex; align-items: center; gap: 10px; }
+        
+        /* MAIN CONTENT */
+        .main-wrapper { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar { background-color: var(--bg-surface); height: 60px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 25px; flex-shrink: 0; transition: background-color 0.3s, border-color 0.3s; }
+        .topbar-title { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); }
+        .topbar-stats { display: flex; gap: 10px; align-items: center; font-size: 0.85rem; font-weight: 600; }
+        .pill-stat { border: 1px solid var(--border-color); padding: 4px 12px; border-radius: 20px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; background: var(--pill-bg); transition: 0.3s; }
+        .pill-green { border-color: var(--badge-green-text); color: var(--badge-green-text); background: var(--badge-green); }
+        .pill-orange { border-color: #f39c12; color: #f39c12; background: rgba(243, 156, 18, 0.1); }
+        
+        .content-scroll { padding: 25px; overflow-y: auto; flex-grow: 1; }
+        
+        /* CARDS & TABLES */
+        .card-summary { background: var(--bg-surface); border-radius: 8px; border: 1px solid var(--border-color); padding: 15px 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); margin-bottom: 20px; transition: background-color 0.3s, border-color 0.3s; }
+        .card-top-blue { border-top: 3px solid var(--accent-blue); }
+        .card-top-purple { border-top: 3px solid var(--accent-purple); }
+        .card-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .card-value { font-size: 1.4rem; font-weight: 700; color: var(--text-dark); }
+        .card-sub { font-size: 0.75rem; color: var(--text-muted); margin-left: 5px; font-weight: normal; }
+        
+        .clean-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem; }
+        .clean-table th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; padding: 12px 15px; border-bottom: 2px solid var(--border-color); }
+        .clean-table td { padding: 12px 15px; border-bottom: 1px solid var(--border-color); vertical-align: middle; color: var(--text-dark); font-weight: 500; }
+        .clean-table tr:hover td { background-color: var(--table-hover); }
+        
+        .badge-ip { background-color: var(--badge-green); color: var(--badge-green-text); padding: 4px 8px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(39, 174, 96, 0.2); }
+        .badge-tag { background-color: var(--accent-blue); color: var(--bg-surface); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 5px; }
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .dot-on { background-color: var(--badge-green-text); box-shadow: 0 0 4px var(--badge-green-text); }
+        .dot-off { background-color: var(--badge-red-text); }
+        
+        .btn-action { background: var(--bg-surface); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; color: var(--text-dark); cursor: pointer; transition: 0.2s; }
+        .btn-action:hover { border-color: var(--text-muted); }
+        .btn-green { border-color: var(--badge-green-text); color: var(--badge-green-text); }
+        .btn-green:hover { background: var(--badge-green); }
+        
+        .tab-section { display: none; }
+        .tab-section.active { display: block; }
+
+        /* FORM & MODAL ADAPTATION */
+        .modal-content { background-color: var(--bg-surface); border-color: var(--border-color); color: var(--text-dark); }
+        .form-control, .form-select { background-color: var(--bg-body); color: var(--text-dark); border: 1px solid var(--border-color); }
+        .form-control:focus, .form-select:focus { background-color: var(--bg-body); color: var(--text-dark); border-color: var(--accent-blue); box-shadow: none; }
     </style>
 </head>
-<body class="p-3 p-md-4">
-    <div class="container-fluid">
-        <div class="card p-3 mb-3">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div class="d-flex align-items-center gap-2">
-                    <img src="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" alt="Logo" style="width: 40px; height: 40px;">
-                    <h4 class="mb-0 fw-bold text-light">Super Dashboard</h4>
-                </div>
-                <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <div class="stat-pill"><span data-i18n="tBal">💰 Total Balance:</span> <strong class="text-success">$<span id="globalBalance">0.00</span></strong></div>
-                    <div class="stat-pill"><span data-i18n="tLife">🏆 Total Lifetime:</span> <strong class="text-warning">$<span id="globalLifetime">0.00</span></strong></div>
-                    <div class="stat-pill"><span data-i18n="gNodes">📡 Global Nodes:</span> <strong class="text-info"><span id="globalOnline">0</span> / <span id="globalTotal">0</span></strong></div>
-                    
-                    <button class="btn btn-outline-light btn-sm px-3" style="height: 38px; border-radius: 8px;" type="button" data-bs-toggle="collapse" data-bs-target="#accountManager" data-i18n="mAcc">⚙️ Kelola Akun ({{ accounts|length }})</button>
-                    
-                    <div class="bg-dark px-2" style="height: 38px; border-radius: 8px; border: 1px solid #313244; display: inline-flex; align-items: center;">
-                        <span class="text-secondary me-1">🌐</span>
-                        <select id="langSelector" class="form-select form-select-sm border-0" style="width: auto; background: transparent; color: #cdd6f4; box-shadow: none;" onchange="changeLanguage()">
-                            <option value="id" style="background-color: #1e1e2e;">ID 🇮🇩</option>
-                            <option value="en" style="background-color: #1e1e2e;">EN 🇺🇸</option>
-                        </select>
-                    </div>
-
-                    <div class="bg-dark px-2" style="height: 38px; border-radius: 8px; border: 1px solid #313244; display: inline-flex; align-items: center;">
-                        <small class="text-secondary me-1" data-i18n="aRef">Auto-refresh:</small>
-                        <select id="refreshInterval" class="form-select form-select-sm border-0" style="width: auto; background: transparent; color: #cdd6f4; box-shadow: none;" onchange="updateRefreshInterval()">
-                            <option value="60000" style="background-color: #1e1e2e;" data-i18n="m1">1 Menit</option>
-                            <option value="120000" selected style="background-color: #1e1e2e;" data-i18n="m2">2 Menit</option>
-                            <option value="300000" style="background-color: #1e1e2e;" data-i18n="m5">5 Menit</option>
-                            <option value="600000" style="background-color: #1e1e2e;" data-i18n="m10">10 Menit</option>
-                            <option value="0" style="background-color: #1e1e2e;" data-i18n="man">Manual</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-primary btn-sm px-3" style="height: 38px; border-radius: 8px;" onclick="fetchAllData()"><span data-i18n="ref">🔄 Refresh</span></button>
-                    <a href="/logout" class="btn btn-outline-danger btn-sm px-3 ms-1" style="height: 38px; border-radius: 8px;" title="Keluar">🚪</a>
-                </div>
+<body>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <img src="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" alt="Logo">
+            Super Dashboard <span class="version">v2.1</span>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item active" id="nav-earnapp" onclick="switchTab('earnapp')">
+                🦊 EarnApp Clients
+            </li>
+            <li class="nav-item" id="nav-gost" onclick="switchTab('gost')">
+                🌐 Proxy List
+            </li>
+            <li class="nav-item" data-bs-toggle="modal" data-bs-target="#accModal">
+                ⚙️ Client Setup
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <div style="width: 30px; height: 30px; background: var(--border-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-dark);">👤</div>
+            <div style="flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <strong>Administrator</strong><br>
+                <a href="/logout" style="color: var(--badge-red-text); text-decoration: none;">Logout</a>
             </div>
+        </div>
+    </div>
 
-            <div class="collapse mt-3 pt-3 border-top border-secondary" id="accountManager">
-                <div class="row g-3">
-                    <div class="col-md-5">
-                        <div class="p-3 rounded-3" style="background-color: #181825;">
-                            <h6 class="mb-3" data-i18n="addA">➕ Tambah Akun EarnApp Baru</h6>
-                            <form action="/add_account" method="POST">
-                                <input type="text" name="name" class="form-control form-control-sm mb-2" placeholder="🏷️ Nama Akun" required>
-                                <textarea name="cookie" class="form-control form-control-sm mb-2" rows="2" placeholder="🍪 Paste Full Cookie EarnApp..." required></textarea>
-                                <button type="submit" class="btn btn-sm btn-success w-100" data-i18n="savA">💾 Simpan Akun</button>
-                            </form>
-                        </div>
-                    </div>
-                    <div class="col-md-7">
-                        <div class="p-3 rounded-3 h-100" style="background-color: #181825;">
-                            <h6 class="mb-3" data-i18n="regA">📋 Daftar Akun Terdaftar</h6>
-                            <div class="table-responsive" style="max-height: 145px;">
-                                <table class="table table-sm table-dark align-middle">
-                                    <tbody>
-                                        {% for acc in accounts %}
-                                        <tr>
-                                            <td><span class="fw-semibold">🦊 {{ acc[1] }}</span></td>
-                                            <td class="text-end"><a href="/delete_account/{{ acc[0] }}" class="btn btn-sm btn-outline-danger py-0" data-i18n="delA">🗑️ Hapus</a></td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <!-- MAIN CONTENT -->
+    <div class="main-wrapper">
+        <div class="topbar">
+            <div class="topbar-title" id="pageTitle">Client : EarnApp Nodes</div>
+            <div class="topbar-stats">
+                <div class="pill-stat">⏱️ Auto: <select id="refreshInterval" style="border:none; outline:none; font-weight:bold; color:var(--text-muted); background:transparent; cursor:pointer;" onchange="updateRefreshInterval()"><option value="60000">1m</option><option value="120000" selected>2m</option><option value="300000">5m</option><option value="0">Off</option></select></div>
+                <div class="pill-stat pill-green">🟢 Ping: <span id="gostPingDisp">0 ms</span></div>
+                <div class="pill-stat pill-orange">💰 $ <span id="globalBalance">0.00</span></div>
+                <button class="btn-action" onclick="fetchAllData()">↻ Refresh</button>
+                <button class="btn-action" id="themeToggleBtn" onclick="toggleTheme()" title="Ganti Tema">🌙</button>
             </div>
         </div>
 
-        <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active fw-bold px-4" id="pills-earnapp-tab" data-bs-toggle="pill" data-bs-target="#pills-earnapp" type="button" role="tab">🦊 EarnApp Nodes</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link fw-bold px-4" id="pills-gost-tab" data-bs-toggle="pill" data-bs-target="#pills-gost" type="button" role="tab" onclick="fetchGostStats()">🛡️ GOST Proxy Manager</button>
-            </li>
-        </ul>
-
-        <div class="tab-content" id="pills-tabContent">
+        <div class="content-scroll">
             
-            <div class="tab-pane fade show active" id="pills-earnapp" role="tabpanel" tabindex="0">
-                <div id="dashboardContent" class="row g-4">
-                    <div class="col-12 text-center py-5"><div class="spinner-border text-info mb-2"></div><p class="text-secondary" data-i18n="loadE">⏳ Sedang memanen data dari semua akun EarnApp...</p></div>
+            <!-- EARNAPP SECTION -->
+            <div id="sec-earnapp" class="tab-section active">
+                <div id="earnappContent">
+                    <div class="text-center py-5 text-muted">⏳ Menarik data klien EarnApp...</div>
                 </div>
             </div>
 
-            <!-- GOST PROXY TAB (SUPER POWER) -->
-            <div class="tab-pane fade" id="pills-gost" role="tabpanel" tabindex="0">
-                <div class="card p-3 mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
-                        <div class="d-flex align-items-center gap-3">
-                            <h5 class="mb-0 fw-bold text-info" data-i18n="gstS">🛡️ GOST Control Center</h5>
-                            <div class="input-group input-group-sm" style="width: auto;">
-                                <select id="gostZoneSelect" class="form-select bg-dark text-light border-secondary" style="width: 130px;" onchange="fetchGostStats()"></select>
-                                <button class="btn btn-outline-info" onclick="showZoneManagerModal()" title="Manajemen Zona">⚙️</button>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-2 align-items-center">
-                            <div class="input-group input-group-sm" style="width: 200px;">
-                                <span class="input-group-text bg-dark text-secondary border-secondary">📡 Ping</span>
-                                <input type="text" id="gostPingTarget" class="form-control bg-dark text-light border-secondary text-center" placeholder="8.8.8.8">
-                                <button class="btn btn-outline-secondary" onclick="updateGostSetting('PING_TARGET', document.getElementById('gostPingTarget').value)">Set</button>
-                            </div>
-                            <button id="btnGostFO" class="btn btn-sm btn-outline-danger" onclick="toggleGostFailover()">Failover: OFF</button>
-                            <button class="btn btn-sm btn-outline-warning" onclick="showTopProxyModal()" data-i18n="gstTop">🏆 Top IP</button>
-                            <button class="btn btn-sm btn-primary" onclick="showPoolModal()" data-i18n="gstPool">🗃️ Gudang Proxy</button>
+            <!-- GOST PROXY SECTION -->
+            <div id="sec-gost" class="tab-section">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex gap-2">
+                        <select id="gostZoneSelect" class="form-select form-select-sm" style="width: 150px; border-color: var(--border-color); font-weight: 600;" onchange="fetchGostStats()"></select>
+                        <button class="btn-action" onclick="showZoneManagerModal()">⚙️ Zona</button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button id="btnGostFO" class="btn-action" onclick="toggleGostFailover()">Failover: OFF</button>
+                        <button class="btn-action" onclick="showTopProxyModal()">🏆 Top IP</button>
+                        <button class="btn-action btn-green" onclick="showPoolModal()">+ Entry Proxy</button>
+                    </div>
+                </div>
+
+                <!-- GOST CARDS SUMMARY -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="card-summary card-top-blue h-100 mb-0">
+                            <div class="card-label">TOTAL PORT TERISI</div>
+                            <div class="card-value" id="gostTotBinds">0<span class="card-sub">dari pool</span></div>
                         </div>
                     </div>
-                    <div class="table-container">
-                        <table class="table table-sm table-dark table-striped align-middle mb-0">
-                            <thead class="sticky-top" style="background-color: #11111b;">
-                                <tr class="text-secondary small">
-                                    <th class="ps-3">Port</th>
-                                    <th>Kredensial Proxy</th>
-                                    <th>🌐 IP Publik</th>
-                                    <th>📍 Lokasi Region</th>
-                                    <th class="text-center">Status</th>
-                                    <th class="text-end pe-3">Action</th>
+                    <div class="col-md-3">
+                        <div class="card-summary card-top-purple h-100 mb-0">
+                            <div class="card-label">PORT ONLINE</div>
+                            <div class="card-value text-success" id="gostTotOnline">0<span class="card-sub">aktif</span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card-summary card-top-blue h-100 mb-0">
+                            <div class="card-label">FAILOVER AKTIF</div>
+                            <div class="card-value text-warning" id="gostTotFO">0<span class="card-sub">meminjam IP</span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card-summary card-top-purple h-100 mb-0">
+                            <div class="card-label">PORT OFFLINE</div>
+                            <div class="card-value text-danger" id="gostTotOff">0<span class="card-sub">LOS/Blocked</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GOST TABLE -->
+                <div class="card-summary p-0" style="border-top: none;">
+                    <div style="padding: 15px 20px; border-bottom: 1px solid var(--border-color); font-weight: 700;">Active Proxy</div>
+                    <div class="table-responsive">
+                        <table class="clean-table">
+                            <thead>
+                                <tr>
+                                    <th class="ps-4">PORT</th>
+                                    <th>PROXY IP ADDRESS</th>
+                                    <th>PROXY COMMAND</th>
+                                    <th>COUNTRY/REGION</th>
+                                    <th>STATUS</th>
+                                    <th class="text-end pe-4">ACTION</th>
                                 </tr>
                             </thead>
-                            <tbody id="gostTableBody"><tr><td colspan="6" class="text-center py-4 text-secondary">⏳ Mengambil data...</td></tr></tbody>
+                            <tbody id="gostTableBody">
+                                <tr><td colspan="6" class="text-center py-4 text-muted">Mengambil daftar proxy...</td></tr>
+                            </tbody>
                         </table>
                     </div>
                 </div>
             </div>
-            
+
         </div>
     </div>
 
-    <!-- MODAL MANAJEMEN ZONA -->
-    <div class="modal fade" id="gostZoneModal" tabindex="-1">
+    <!-- MODAL ACCOUNT SETUP -->
+    <div class="modal fade" id="accModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content" style="background-color: #1e1e2e; border: 1px solid #45475a; border-radius: 14px;">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title fw-bold text-light">⚙️ Manajemen Zona Port</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="modal-content shadow">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold">Client Setup (Accounts)</h5>
+                    <button type="button" class="btn-close" style="filter: var(--btn-close-filter);" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="small text-secondary mb-2">Daftar Zona Aktif (Pisahkan dengan koma):</p>
-                    <textarea id="zoneEditorInput" class="form-control bg-dark text-light border-secondary mb-3" rows="3" placeholder="Misal: 1081-1090, 60000-60010"></textarea>
-                    <div class="alert alert-info py-2 small mb-0">
-                        Format harus berpasangan <b>START-END</b>. Contoh: <code>1081-1090</code>
-                    </div>
-                </div>
-                <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="button" class="btn btn-sm btn-success px-4" onclick="saveZones()">💾 Simpan Zona</button>
+                    <form action="/add_account" method="POST" class="mb-4">
+                        <label class="card-label">Tambah Akun</label>
+                        <input type="text" name="name" class="form-control form-control-sm mb-2" placeholder="Nama Client" required>
+                        <textarea name="cookie" class="form-control form-control-sm mb-2" rows="2" placeholder="Paste Cookie EarnApp..." required></textarea>
+                        <button type="submit" class="btn-action btn-green w-100">Simpan Client</button>
+                    </form>
+                    <label class="card-label">Client Terdaftar</label>
+                    <table class="table table-sm align-middle" style="color: var(--text-dark);">
+                        <tbody>
+                            {% for acc in accounts %}
+                            <tr>
+                                <td class="fw-semibold">{{ acc[1] }}</td>
+                                <td class="text-end"><a href="/delete_account/{{ acc[0] }}" class="btn-action text-danger text-decoration-none">Hapus</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MODAL POOL GOST -->
+    <!-- MODAL ZONE -->
+    <div class="modal fade" id="gostZoneModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold">Pengaturan Zona</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="card-label">Daftar Zona Aktif (Pisahkan koma)</label>
+                    <textarea id="zoneEditorInput" class="form-control form-control-sm mb-3" rows="2"></textarea>
+                    <button class="btn-action btn-green w-100" onclick="saveZones()">Simpan Zona</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL POOL -->
     <div class="modal fade" id="gostPoolModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content" style="background-color: #1e1e2e; border: 1px solid #45475a; border-radius: 14px;">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title fw-bold text-light">🗃️ Manajemen Gudang Proxy (Zona <span id="poolZoneName"></span>)</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="modal-content shadow">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold">Entry Proxy (Zona <span id="poolZoneName"></span>)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="d-flex gap-2 mb-3">
-                        <textarea id="newPoolProxies" class="form-control form-control-sm bg-dark text-light border-secondary" rows="2" placeholder="Paste proxy (host:port:user:pass) - Boleh lebih dari 1 baris"></textarea>
-                        <button class="btn btn-success btn-sm px-4" onclick="addPoolProxies()">➕ Tambah</button>
+                        <textarea id="newPoolProxies" class="form-control form-control-sm" rows="1" placeholder="host:port:user:pass"></textarea>
+                        <button class="btn-action btn-green" onclick="addPoolProxies()">Tambah</button>
                     </div>
-                    <div class="table-responsive" style="max-height: 300px;">
-                        <table class="table table-sm table-dark align-middle">
-                            <thead class="sticky-top" style="background-color: #11111b;"><tr><th>Proxy Asli</th><th>IP / Status</th><th>Terkait Port</th><th class="text-end">Aksi</th></tr></thead>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        <table class="clean-table">
+                            <thead><tr><th>Proxy</th><th>IP Target</th><th>Status Port</th><th>Aksi</th></tr></thead>
                             <tbody id="poolTableBody"></tbody>
                         </table>
                     </div>
@@ -204,18 +288,18 @@
         </div>
     </div>
 
-    <!-- MODAL TOP PROXY -->
+    <!-- MODAL TOP -->
     <div class="modal fade" id="gostTopModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content" style="background-color: #1e1e2e; border: 1px solid #45475a; border-radius: 14px;">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title fw-bold text-light">🏆 Database IP Terbaik (Rating)</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="modal-content shadow">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold">Top Proxy Data</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="table-responsive" style="max-height: 350px;">
-                        <table class="table table-sm table-dark align-middle">
-                            <thead class="sticky-top" style="background-color: #11111b;"><tr><th>Rank</th><th>IP Address</th><th>Lokasi</th><th class="text-end">Peak Act</th></tr></thead>
+                    <div style="max-height: 350px; overflow-y: auto;">
+                        <table class="clean-table">
+                            <thead><tr><th>Rank</th><th>IP Address</th><th>Location</th><th>Peak Act</th></tr></thead>
                             <tbody id="topTableBody"></tbody>
                         </table>
                     </div>
@@ -226,57 +310,60 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const i18n = {
-            id: {
-                tBal: "💰 Total Balance:", tLife: "🏆 Total Lifetime:", gNodes: "📡 Global Nodes:", mAcc: "⚙️ Kelola Akun ({{ accounts|length }})",
-                aRef: "Auto-refresh:", m1: "1 Menit", m2: "2 Menit", m5: "5 Menit", m10: "10 Menit", man: "Manual", ref: "🔄 Refresh",
-                addA: "➕ Tambah Akun EarnApp Baru", savA: "💾 Simpan Akun", regA: "📋 Daftar Akun Terdaftar", delA: "🗑️ Hapus",
-                loadE: "⏳ Sedang memanen data dari semua akun EarnApp...", gstS: "🛡️ GOST Control Center", gstTop: "🏆 Top IP", gstPool: "🗃️ Gudang Proxy"
-            },
-            en: {
-                tBal: "💰 Total Balance:", tLife: "🏆 Total Lifetime:", gNodes: "📡 Global Nodes:", mAcc: "⚙️ Manage Accounts ({{ accounts|length }})",
-                aRef: "Auto-refresh:", m1: "1 Minute", m2: "2 Minutes", m5: "5 Minutes", m10: "10 Minutes", man: "Manual", ref: "🔄 Refresh",
-                addA: "➕ Add New EarnApp Account", savA: "💾 Save Account", regA: "📋 Registered Accounts", delA: "🗑️ Delete",
-                loadE: "⏳ Harvesting data from all EarnApp accounts...", gstS: "🛡️ GOST Control Center", gstTop: "🏆 Top IP", gstPool: "🗃️ Proxy Pool"
-            }
-        };
-
-        let currentLang = localStorage.getItem('earnapp_lang') || 'id';
         let refreshTimer = null;
         let poolModalInst = null;
         let topModalInst = null;
         let zoneModalInst = null;
         let currentGostZone = "";
         let gostSettings = {};
-        window.appData = [];
 
         document.addEventListener("DOMContentLoaded", () => {
-            document.getElementById('langSelector').value = currentLang;
-            applyTranslations();
-            const si = localStorage.getItem('earnapp_refresh_interval');
-            if (si !== null) document.getElementById('refreshInterval').value = si;
-            
+            // THEME INITIALIZATION
+            const savedTheme = localStorage.getItem('earnapp_theme') || 'light';
+            applyTheme(savedTheme);
+
             poolModalInst = new bootstrap.Modal(document.getElementById('gostPoolModal'));
             topModalInst = new bootstrap.Modal(document.getElementById('gostTopModal'));
             zoneModalInst = new bootstrap.Modal(document.getElementById('gostZoneModal'));
+            
+            const si = localStorage.getItem('earnapp_refresh_interval');
+            if (si !== null) document.getElementById('refreshInterval').value = si;
             
             startRefreshTimer();
             fetchAllData();
         });
 
-        function changeLanguage() {
-            currentLang = document.getElementById('langSelector').value;
-            localStorage.setItem('earnapp_lang', currentLang);
-            applyTranslations();
-            fetchAllData();
+        // ==================== THEME TOGGLE LOGIC ====================
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('earnapp_theme', theme);
+            document.getElementById('themeToggleBtn').innerText = theme === 'dark' ? '☀️' : '🌙';
+            document.getElementById('themeToggleBtn').title = theme === 'dark' ? 'Mode Terang' : 'Mode Gelap';
+            
+            // Fix bootstrap modal close button contrast on dark mode
+            if (theme === 'dark') {
+                document.documentElement.style.setProperty('--btn-close-filter', 'invert(1) grayscale(100%) brightness(200%)');
+            } else {
+                document.documentElement.style.setProperty('--btn-close-filter', 'none');
+            }
         }
 
-        function applyTranslations() {
-            let T = i18n[currentLang];
-            document.querySelectorAll('[data-i18n]').forEach(el => {
-                const k = el.getAttribute('data-i18n');
-                if (T[k]) el.innerHTML = T[k];
-            });
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-section').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`nav-${tabId}`).classList.add('active');
+            document.getElementById(`sec-${tabId}`).classList.add('active');
+            
+            document.getElementById('pageTitle').innerText = tabId === 'earnapp' ? 'Client : EarnApp Nodes' : 'Proxy List : Active Proxy';
+            
+            if (tabId === 'gost') fetchGostStats();
+            else fetchEarnAppStats();
         }
 
         function updateRefreshInterval() {
@@ -291,11 +378,11 @@
         }
 
         function fetchAllData() {
-            fetchEarnAppStats();
-            if (document.getElementById('pills-gost-tab').classList.contains('active')) fetchGostStats();
+            if (document.getElementById('sec-gost').classList.contains('active')) fetchGostStats();
+            else fetchEarnAppStats();
         }
 
-        // ==================== GOST TAB LOGIC ====================
+        // ==================== GOST LOGIC ====================
         async function reqGost(action, payload = {}) {
             payload.action = action;
             const res = await fetch('/api/gost/proxy_action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
@@ -306,27 +393,23 @@
             try {
                 const res = await fetch('/api/gost/full');
                 const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.message || "Endpoint API GOST belum siap.");
+                if (!res.ok || !data.success) throw new Error("API GOST belum merespon.");
                 
                 gostSettings = data.settings || {};
                 
                 const zs = document.getElementById('gostZoneSelect');
                 const zones = (gostSettings.ZONES || "1081-1090").split(",").map(x => x.trim()).filter(x => x);
-                
-                // Regenerate dropdown if changed
                 if (zs.options.length !== zones.length || !zones.includes(zs.value)) {
                     zs.innerHTML = '';
                     zones.forEach(z => zs.add(new Option(`Zone ${z}`, z)));
                     currentGostZone = zones[0];
-                } else {
-                    currentGostZone = zs.value;
-                }
+                } else { currentGostZone = zs.value; }
 
-                document.getElementById('gostPingTarget').value = gostSettings.PING_TARGET || "8.8.8.8";
+                if (gostSettings.PING_TARGET) document.getElementById('gostPingDisp').innerText = `to ${gostSettings.PING_TARGET}`;
                 
                 const btnFO = document.getElementById('btnGostFO');
-                if (gostSettings.AUTO_FAILOVER === "1") { btnFO.className = "btn btn-sm btn-success"; btnFO.innerText = "Failover: ON"; }
-                else { btnFO.className = "btn btn-sm btn-outline-danger"; btnFO.innerText = "Failover: OFF"; }
+                if (gostSettings.AUTO_FAILOVER === "1") { btnFO.classList.add("btn-green"); btnFO.innerText = "Failover: ON"; }
+                else { btnFO.classList.remove("btn-green"); btnFO.innerText = "Failover: OFF"; }
                 
                 let html = '';
                 const my_px = data.proxies.filter(x => {
@@ -336,161 +419,136 @@
                     return sp >= b_s && sp <= b_e;
                 });
 
+                let totBinds=0, totOn=0, totFo=0, totOff=0;
+
                 if (my_px.length === 0) {
-                    html = '<tr><td colspan="6" class="text-center py-4 text-warning">Belum ada port yang di-bind di zona ini.</td></tr>';
+                    html = '<tr><td colspan="6" class="text-center py-4 text-muted">Belum ada data port di zona ini.</td></tr>';
                 } else {
                     my_px.forEach(p => {
-                        let badge = '<span class="badge badge-offline">🔴 OFFLINE</span>';
                         let st = p.status || "";
-                        if (st.includes('Online')) badge = '<span class="badge badge-online">🟢 ONLINE</span>';
-                        else if (st.includes('Failover')) badge = '<span class="badge badge-blocked">🔄 FAILOVER</span>';
-                        else if (st.includes('Checking') || st.includes('Memeriksa')) badge = '<span class="badge bg-secondary">⏳ CHECKING</span>';
-                        else if (st.includes('Free')) badge = '<span class="badge bg-dark border-secondary text-secondary">⚪ FREE (KOSONG)</span>';
+                        let statusText = `<span style="color:var(--text-muted);"><span class="status-dot dot-off"></span>OFFLINE</span>`;
                         
-                        let s_px = p.proxy || "";
-                        if(s_px.length > 40) s_px = s_px.substring(0, 40) + '...';
+                        if (st.includes('Online')) { statusText = `<span style="color:var(--badge-green-text); font-weight:700;"><span class="status-dot dot-on"></span>ONLINE</span>`; totOn++; totBinds++; }
+                        else if (st.includes('Failover')) { statusText = `<span style="color:#f39c12; font-weight:700;"><span class="status-dot" style="background:#f39c12;"></span>FAILOVER</span>`; totFo++; totBinds++; }
+                        else if (st.includes('Checking') || st.includes('Memeriksa')) { statusText = `<span class="text-muted">CHECKING...</span>`; totBinds++; }
+                        else if (st.includes('Free')) { statusText = `<span class="text-muted">-</span>`; }
+                        else { totOff++; totBinds++; }
+                        
+                        let short_proxy = p.proxy || "-";
+                        if(short_proxy.length > 25) short_proxy = short_proxy.substring(0, 25) + '...';
 
-                        let btnAction = `<button class="btn btn-sm btn-outline-danger py-0" onclick="bindPort('${p.port}', '')">🔌 Unbind</button>`;
-                        if(st.includes('Free')) btnAction = `<button class="btn btn-sm btn-outline-success py-0" onclick="showPoolModal('${p.port}')">🔗 Bind</button>`;
+                        let ipCol = p.ip !== "-" ? `<span class="badge-ip">${p.ip}</span> <span class="badge-tag">1000</span>` : "-";
+
+                        let btnAction = `<button class="btn-action text-danger" onclick="bindPort('${p.port}', '')">Unbind</button>`;
+                        if(st.includes('Free')) btnAction = `<button class="btn-action text-primary" onclick="showPoolModal('${p.port}')">Bind</button>`;
 
                         html += `<tr>
-                            <td class="ps-3 fw-bold text-info">${p.port}</td>
-                            <td class="font-monospace text-secondary" style="font-size: 0.8rem;">${s_px}</td>
-                            <td class="text-light">${p.ip}</td>
-                            <td><span class="badge bg-dark border border-secondary text-light">${p.location}</span></td>
-                            <td class="text-center">${badge}</td>
-                            <td class="text-end pe-3">${btnAction}</td>
+                            <td class="ps-4 fw-bold text-dark">${p.port}</td>
+                            <td>${ipCol}</td>
+                            <td class="font-monospace text-muted" style="font-size:0.75rem;">${short_proxy}</td>
+                            <td>${p.location}</td>
+                            <td>${statusText}</td>
+                            <td class="text-end pe-4">${btnAction}</td>
                         </tr>`;
                     });
                 }
+                
+                document.getElementById('gostTotBinds').innerHTML = `${totBinds}<span class="card-sub">ports terisi</span>`;
+                document.getElementById('gostTotOnline').innerHTML = `${totOn}<span class="card-sub">aktif normal</span>`;
+                document.getElementById('gostTotFO').innerHTML = `${totFo}<span class="card-sub">IP pengganti</span>`;
+                document.getElementById('gostTotOff').innerHTML = `${totOff}<span class="card-sub">putus koneksi</span>`;
+                
                 document.getElementById('gostTableBody').innerHTML = html;
             } catch (e) {
-                document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger"><b>Error GOST:</b> ${e.message}</td></tr>`;
+                document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">Backend Error: ${e.message}</td></tr>`;
             }
         }
 
-        function showZoneManagerModal() {
-            document.getElementById('zoneEditorInput').value = gostSettings.ZONES || "1081-1090";
-            zoneModalInst.show();
-        }
-
+        function showZoneManagerModal() { document.getElementById('zoneEditorInput').value = gostSettings.ZONES || "1081-1090"; zoneModalInst.show(); }
         async function saveZones() {
             const rawZones = document.getElementById('zoneEditorInput').value;
             const newZones = rawZones.split(',').map(x => x.trim()).filter(x => x && x.includes('-')).join(',');
             if (newZones) {
                 const res = await reqGost("update_zones", {zones: newZones});
-                if (res.success) {
-                    zoneModalInst.hide();
-                    document.getElementById('gostZoneSelect').innerHTML = ''; // Force dropdown rebuild
-                    fetchGostStats();
-                } else alert("Gagal menyimpan zona.");
-            } else alert("Format zona salah.");
+                if (res.success) { zoneModalInst.hide(); document.getElementById('gostZoneSelect').innerHTML = ''; fetchGostStats(); }
+            }
         }
-
-        async function updateGostSetting(key, val) {
-            await reqGost("settings", {key: key, value: val});
-            fetchGostStats();
-        }
-
-        function toggleGostFailover() {
-            const nv = gostSettings.AUTO_FAILOVER === "1" ? "0" : "1";
-            updateGostSetting("AUTO_FAILOVER", nv);
-        }
-
+        function toggleGostFailover() { updateGostSetting("AUTO_FAILOVER", gostSettings.AUTO_FAILOVER === "1" ? "0" : "1"); }
+        async function updateGostSetting(k, v) { await reqGost("settings", {key: k, value: v}); fetchGostStats(); }
+        
         async function showPoolModal(targetPort = null) {
             document.getElementById('poolZoneName').innerText = currentGostZone;
             const res = await reqGost("get_pool", {zone: currentGostZone});
             if (res.success) {
                 let html = '';
                 res.pool.forEach(p => {
-                    let b = p.bound_to ? `<span class="badge bg-secondary">Port ${p.bound_to}</span>` : '<span class="badge bg-success text-dark">Nganggur</span>';
-                    let act = '';
-                    if (targetPort && !p.bound_to) {
-                        act = `<button class="btn btn-sm btn-primary py-0" onclick="bindPort('${targetPort}', '${p.proxy}'); poolModalInst.hide();">Gunakan ke P:${targetPort}</button>`;
-                    } else {
-                        act = `<button class="btn btn-sm btn-outline-danger py-0" onclick="delPoolProxy('${p.proxy}')">Hapus</button>`;
-                    }
-                    html += `<tr><td class="font-monospace small text-secondary">${p.proxy.substring(0,35)}...</td><td>${p.ip}</td><td>${b}</td><td class="text-end">${act}</td></tr>`;
+                    let b = p.bound_to ? `<span style="color:var(--text-muted);">Port ${p.bound_to}</span>` : '<span class="text-success">Free</span>';
+                    let act = targetPort && !p.bound_to ? `<button class="btn-action text-primary" onclick="bindPort('${targetPort}', '${p.proxy}'); poolModalInst.hide();">Pakai</button>` : `<button class="btn-action text-danger" onclick="delPoolProxy('${p.proxy}')">Del</button>`;
+                    html += `<tr><td class="font-monospace text-muted" style="font-size:0.75rem;">${p.proxy.substring(0,35)}...</td><td>${p.ip}</td><td>${b}</td><td class="text-end">${act}</td></tr>`;
                 });
-                document.getElementById('poolTableBody').innerHTML = html;
-                poolModalInst.show();
+                document.getElementById('poolTableBody').innerHTML = html; poolModalInst.show();
             }
         }
-
         async function addPoolProxies() {
-            const txt = document.getElementById('newPoolProxies').value;
-            const ps = txt.split('\n').map(x => x.trim()).filter(x => x);
-            if (ps.length > 0) {
-                await reqGost("add_pool", {zone: currentGostZone, proxies: ps});
-                document.getElementById('newPoolProxies').value = '';
-                showPoolModal();
-            }
+            const ps = document.getElementById('newPoolProxies').value.split('\n').map(x => x.trim()).filter(x => x);
+            if (ps.length > 0) { await reqGost("add_pool", {zone: currentGostZone, proxies: ps}); document.getElementById('newPoolProxies').value = ''; showPoolModal(); }
         }
-
-        async function delPoolProxy(prx) {
-            await reqGost("del_pool", {zone: currentGostZone, proxy: prx});
-            showPoolModal();
-        }
-
-        async function bindPort(port, prx) {
-            await reqGost("bind", {zone: currentGostZone, port: port, proxy: prx});
-            setTimeout(fetchGostStats, 1000);
-        }
-
+        async function delPoolProxy(prx) { await reqGost("del_pool", {zone: currentGostZone, proxy: prx}); showPoolModal(); }
+        async function bindPort(port, prx) { await reqGost("bind", {zone: currentGostZone, port: port, proxy: prx}); setTimeout(fetchGostStats, 800); }
         async function showTopProxyModal() {
             const res = await reqGost("top");
             if (res.success) {
                 let html = '';
-                res.top.forEach((t, i) => {
-                    html += `<tr><td>${i+1}</td><td class="text-warning">${t.ip}</td><td class="text-light">${t.location}</td><td class="text-end fw-bold">${t.peak}</td></tr>`;
-                });
-                document.getElementById('topTableBody').innerHTML = html;
-                topModalInst.show();
+                res.top.forEach((t, i) => { html += `<tr><td>${i+1}</td><td class="fw-bold">${t.ip}</td><td>${t.location}</td><td class="text-end">${t.peak}</td></tr>`; });
+                document.getElementById('topTableBody').innerHTML = html; topModalInst.show();
             }
         }
 
         // ==================== EARNAPP LOGIC ====================
         async function fetchEarnAppStats() {
             try {
-                const response = await fetch('/api/stats');
-                if (response.status === 401 || response.redirected) { window.location.href = '/login'; return; }
-                if (!response.ok) throw new Error(`HTTP Error`);
-                const data = await response.json();
-                window.appData = data.accounts || [];
-
+                const res = await fetch('/api/stats');
+                if (res.status === 401 || res.redirected) { window.location.href = '/login'; return; }
+                const data = await res.json();
+                
                 document.getElementById('globalBalance').innerText = (data.total_balance || 0).toFixed(2);
                 document.getElementById('globalLifetime').innerText = (data.total_lifetime || 0).toFixed(2);
-                document.getElementById('globalOnline').innerText = data.total_online || 0;
-                document.getElementById('globalTotal').innerText = data.total_nodes || 0;
 
-                if (window.appData.length === 0) {
-                    document.getElementById('dashboardContent').innerHTML = `<div class="col-12"><div class="card p-4 text-center text-secondary">Belum ada akun EarnApp.</div></div>`;
-                    return;
+                if (!data.accounts || data.accounts.length === 0) {
+                    document.getElementById('earnappContent').innerHTML = `<div class="text-center py-5 text-muted">Belum ada klien. Klik "Client Setup" di kiri.</div>`; return;
                 }
 
                 let html = '';
-                window.appData.forEach(acc => {
-                    if (acc.error) { html += `<div class="col-12"><div class="card border-danger p-3"><h5>😿 ${acc.name}</h5><p class="text-danger mb-0">${acc.error}</p></div></div>`; return; }
-                    const bc = acc.blocked_nodes !== undefined ? acc.blocked_nodes : 0;
-                    const wB = bc > 0 ? `<span class="badge badge-blocked ms-1">⚠️ ${bc} Blocked</span>` : '';
+                data.accounts.forEach(acc => {
+                    if (acc.error) return;
+                    
                     html += `
-                    <div class="col-12"><div class="card p-3 h-100"><div class="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
-                        <div><h5 class="mb-1 fw-bold text-info">🦊 ${acc.name}</h5><div class="d-flex flex-wrap gap-2 align-items-center small"><span class="badge badge-online">🟢 ${acc.active_nodes} / ${acc.total_nodes} Online</span>${wB}</div></div>
-                        <div class="text-end me-3"><div class="fs-4 fw-bold text-success">💰 $${acc.balance.toFixed(2)}</div></div></div>
-                        <div class="d-flex flex-wrap justify-content-between align-items-end mb-2 mt-2"><div class="small fw-semibold text-light mb-1">🖥️ Node List</div></div>
-                        <div class="table-container"><table class="table table-sm table-dark table-striped align-middle"><thead class="sticky-top" style="background-color: #11111b;"><tr class="text-secondary small"><th class="ps-3">Node</th><th>Negara</th><th>🌐 IP Address</th><th>Earned</th><th class="text-center pe-3">Status</th></tr></thead><tbody id="tbody_${acc.id}">`;
-
+                    <div class="mb-5">
+                        <h5 class="fw-bold text-dark mb-3">Client : ${acc.name}</h5>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3"><div class="card-summary card-top-purple h-100 mb-0"><div class="card-label">STATUS CLIENT</div><div class="card-value ${acc.active_nodes>0?'text-success':'text-danger'}">${acc.active_nodes>0?'ONLINE':'OFFLINE'}</div></div></div>
+                            <div class="col-md-3"><div class="card-summary card-top-blue h-100 mb-0"><div class="card-label">TOTAL PENDAPATAN</div><div class="card-value">$${acc.balance.toFixed(2)}</div></div></div>
+                            <div class="col-md-3"><div class="card-summary card-top-purple h-100 mb-0"><div class="card-label">NODES AKTIF</div><div class="card-value">${acc.active_nodes}<span class="card-sub">/ ${acc.total_nodes}</span></div></div></div>
+                            <div class="col-md-3"><div class="card-summary card-top-blue h-100 mb-0"><div class="card-label">NODES TERBLOKIR</div><div class="card-value text-danger">${acc.blocked_nodes}</div></div></div>
+                        </div>
+                        <div class="card-summary p-0" style="border-top: none;">
+                            <div class="table-responsive">
+                                <table class="clean-table">
+                                    <thead><tr><th class="ps-4">NODE NAME</th><th>COUNTRY</th><th>IP ADDRESS</th><th>EARNED</th><th class="text-end pe-4">STATUS</th></tr></thead>
+                                    <tbody>`;
+                                    
                     acc.devices.forEach(dev => {
-                        const st = dev.status === 'banned' ? 'blocked' : dev.status;
-                        let sB = `<span class="badge badge-offline">🔴 OFFLINE</span>`;
-                        if (st === 'online') sB = `<span class="badge badge-online">🟢 ONLINE</span>`;
-                        else if (st === 'blocked') { const rL = dev.error_reason ? `<small class="text-warning d-block mt-1" style="font-size:0.7rem;">${dev.error_reason}</small>` : ''; sB = `<span class="badge badge-blocked" title="${dev.error_reason || 'IP Blocked'}">⚠️ BLOCKED</span>${rL}`; }
-                        const ipH = (dev.ips && dev.ips.length > 0) ? dev.ips.map(ip => `<span class="ip-chip">${ip}</span>`).join(' ') : '<span class="text-muted small">-</span>';
-                        html += `<tr class="row-node-${acc.id}" data-status="${st}"><td class="ps-3 fw-semibold text-nowrap">${dev.name}</td><td class="text-nowrap"><span class="badge bg-dark border border-secondary text-info">${dev.country}</span></td><td>${ipH}</td><td class="text-nowrap"><span class="fw-bold text-success">$${dev.earned.toFixed(2)}</span></td><td class="text-center pe-3">${sB}</td></tr>`;
+                        let st = dev.status === 'banned' ? 'blocked' : dev.status;
+                        let sB = `<span style="color:var(--text-muted);"><span class="status-dot dot-off"></span>OFFLINE</span>`;
+                        if (st === 'online') sB = `<span style="color:var(--badge-green-text); font-weight:700;"><span class="status-dot dot-on"></span>ONLINE</span>`;
+                        else if (st === 'blocked') sB = `<span class="badge-tag bg-danger" title="${dev.error_reason || ''}">BLOCKED</span>`;
+                        
+                        const ipH = (dev.ips && dev.ips.length > 0) ? dev.ips.map(ip => `<span class="badge-ip">${ip}</span>`).join(' ') : '-';
+                        html += `<tr><td class="ps-4 fw-bold text-dark">${dev.name}</td><td>${dev.country}</td><td>${ipH}</td><td class="fw-bold text-success">$${dev.earned.toFixed(2)}</td><td class="text-end pe-4">${sB}</td></tr>`;
                     });
                     html += `</tbody></table></div></div></div>`;
                 });
-                document.getElementById('dashboardContent').innerHTML = html;
+                document.getElementById('earnappContent').innerHTML = html;
             } catch (error) {}
         }
     </script>
