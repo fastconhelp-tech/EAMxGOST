@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="id" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EarnApp Multi-Account Monitoring</title>
+    <link rel="icon" href="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" type="image/png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #181825; color: #cdd6f4; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .card { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); }
+        .stat-pill { background-color: #313244; border-radius: 8px; height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+        .chart-box { background-color: #181825; border: 1px solid #313244; border-radius: 12px; padding: 12px; height: 220px; position: relative; }
+        .table-container { max-height: 360px; overflow-y: auto; border-radius: 10px; border: 1px solid #313244; }
+        .table-dark { --bs-table-bg: #181825; --bs-table-striped-bg: #1e1e2e; margin-bottom: 0; }
+        .ip-chip { display: inline-block; margin: 2px 4px 2px 0; font-family: monospace; font-size: 0.85rem; }
+        .badge-online { background-color: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid #a6e3a1; }
+        .badge-offline { background-color: rgba(243, 139, 168, 0.15); color: #f38ba8; border: 1px solid #f38ba8; }
+        .badge-blocked { background-color: rgba(250, 179, 135, 0.18); color: #fab387; border: 1px solid #fab387; font-weight: bold; }
+        .btn-withdraw { background-color: #a6e3a1; color: #11111b; font-weight: 600; border: none; }
+        .btn-withdraw:hover { background-color: #94e2d5; color: #11111b; }
+        .btn-withdraw-low { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; }
+        .btn-withdraw-low:hover { background-color: #45475a; color: #ffffff; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #181825; }
+        ::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
+    </style>
+</head>
+<body class="p-3 p-md-4">
+    <div class="container-fluid">
+        <div class="card p-3 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <img src="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" onerror="this.src='/static/EAIcon.png'; this.onerror=null;" alt="Logo" style="width: 40px; height: 40px; object-fit: contain;">
+                    <h4 class="mb-0 fw-bold text-light">EarnApp Multi-Account Monitoring</h4>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <div class="stat-pill"><span data-i18n="totalBalance">💰 Total Balance:</span><strong class="text-success" style="font-size: 1.05rem;">$<span id="globalBalance">0.00</span></strong></div>
+                    <div class="stat-pill"><span data-i18n="totalLifetime">🏆 Total Lifetime:</span><strong class="text-warning" style="font-size: 1.05rem;">$<span id="globalLifetime">0.00</span></strong></div>
+                    <div class="stat-pill"><span data-i18n="globalNodes">📡 Global Nodes:</span><strong class="text-info" style="font-size: 1.05rem;"><span id="globalOnline">0</span> / <span id="globalTotal">0</span></strong></div>
+                    <button id="btnManageAcc" class="btn btn-outline-light btn-sm px-3" style="height: 38px; border-radius: 8px;" type="button" data-bs-toggle="collapse" data-bs-target="#accountManager">⚙️ Kelola Akun ({{ accounts|length }})</button>
+                    <div class="bg-dark px-2" style="height: 38px; border-radius: 8px; border: 1px solid #313244; display: inline-flex; align-items: center;">
+                        <span class="text-secondary me-1">🌐</span>
+                        <select id="langSelector" class="form-select form-select-sm border-0" style="width: auto; background: transparent; color: #cdd6f4; font-size: 0.85rem; box-shadow: none;" onchange="changeLanguage()">
+                            <option value="id" style="background-color: #1e1e2e;">ID 🇮🇩</option>
+                            <option value="en" style="background-color: #1e1e2e;">EN 🇺🇸</option>
+                        </select>
+                    </div>
+                    <div class="bg-dark px-2" style="height: 38px; border-radius: 8px; border: 1px solid #313244; display: inline-flex; align-items: center;">
+                        <small class="text-secondary me-1" data-i18n="autoRef">Auto-refresh:</small>
+                        <select id="refreshInterval" class="form-select form-select-sm border-0" style="width: auto; background: transparent; color: #cdd6f4; font-size: 0.85rem; box-shadow: none;" onchange="updateRefreshInterval()">
+                            <option value="60000" style="background-color: #1e1e2e;" data-i18n="min1">1 Menit</option>
+                            <option value="120000" selected style="background-color: #1e1e2e;" data-i18n="min2">2 Menit</option>
+                            <option value="300000" style="background-color: #1e1e2e;" data-i18n="min5">5 Menit</option>
+                            <option value="600000" style="background-color: #1e1e2e;" data-i18n="min10">10 Menit</option>
+                            <option value="0" style="background-color: #1e1e2e;" data-i18n="manual">Manual</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary btn-sm px-3" style="height: 38px; border-radius: 8px;" onclick="fetchStats()"><span data-i18n="refresh">🔄 Refresh</span></button>
+                    <a href="/logout" class="btn btn-outline-danger btn-sm px-3 ms-1" style="height: 38px; border-radius: 8px; display: inline-flex; align-items: center;" title="Keluar">🚪</a>
+                </div>
+            </div>
+
+            <div class="collapse mt-3 pt-3 border-top border-secondary" id="accountManager">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <div class="p-3 rounded-3" style="background-color: #181825;">
+                            <h6 class="mb-3" data-i18n="addAccTitle">➕ Tambah Akun EarnApp Baru</h6>
+                            <form action="/add_account" method="POST">
+                                <input type="text" name="name" id="inputAccName" class="form-control form-control-sm mb-2" placeholder="🏷️ Nama Akun" required>
+                                <textarea name="cookie" id="inputCookie" class="form-control form-control-sm mb-2" rows="2" placeholder="🍪 Paste Full Cookie EarnApp di sini..." required></textarea>
+                                <button type="submit" class="btn btn-sm btn-success w-100" data-i18n="saveAccBtn">💾 Simpan Akun</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <div class="p-3 rounded-3 h-100" style="background-color: #181825;">
+                            <h6 class="mb-3" data-i18n="regAccTitle">📋 Daftar Akun Terdaftar</h6>
+                            <div class="table-responsive" style="max-height: 145px;">
+                                <table class="table table-sm table-dark align-middle">
+                                    <thead><tr><th>#</th><th data-i18n="tblAccName">Nama Akun</th><th class="text-end" data-i18n="tblAction">Aksi</th></tr></thead>
+                                    <tbody>
+                                        {% for acc in accounts %}
+                                        <tr>
+                                            <td>{{ acc[0] }}</td>
+                                            <td><span class="fw-semibold">🦊 {{ acc[1] }}</span></td>
+                                            <td class="text-end"><a href="/delete_account/{{ acc[0] }}" class="btn btn-sm btn-outline-danger py-0" data-i18n="btnDelete">🗑️ Hapus</a></td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="dashboardContent" class="row g-4">
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-info mb-2" role="status"></div>
+                <p class="text-secondary" id="loadingText">⏳ Sedang memanen data dari semua akun EarnApp...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="withdrawModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background-color: #1e1e2e; border: 1px solid #45475a; border-radius: 14px;">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title fw-bold text-light" data-i18n="wdTitle">💸 Pencairan Dana (Withdraw)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="wdAccId">
+                    <div class="p-3 rounded-3 mb-3 d-flex justify-content-between align-items-center" style="background-color: #181825; border: 1px solid #313244;">
+                        <div><small class="text-secondary d-block" data-i18n="wdSelAcc">Akun Terpilih</small><strong class="fs-5 text-info" id="wdAccName">-</strong></div>
+                        <div class="text-end"><small class="text-secondary d-block" data-i18n="wdBal">Saldo Tersedia</small><strong class="fs-4 text-success" id="wdAccBalance">$0.00</strong></div>
+                    </div>
+                    <div id="wdMinWarning" class="alert alert-warning py-2 small d-none" data-i18n="wdMinWarn">⚠️ Saldo akun ini masih di bawah batas minimal penarikan EarnApp (<strong>$2.50</strong>).</div>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary" data-i18n="wdMethod">📧 Metode Pencairan</label>
+                        <select id="wdMethod" class="form-select form-select-sm" style="background-color: #181825; border-color: #313244;"><option value="paypal.com">💳 PayPal (paypal.com)</option></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary" data-i18n="wdEmailLbl">📩 Email PayPal Tujuan</label>
+                        <input type="email" id="wdEmail" class="form-control" style="background-color: #181825; border-color: #313244;" placeholder="email@gmail.com" required>
+                        <small class="text-secondary" style="font-size: 0.75rem;" data-i18n="wdEmailNote">*Email otomatis tersimpan di browser.</small>
+                    </div>
+                    <div id="wdStatusAlert" class="alert d-none mb-0 py-2 small"></div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal" data-i18n="wdCancel">Batal</button>
+                    <button type="button" id="wdSubmitBtn" onclick="submitWithdraw()" class="btn btn-sm btn-success px-4 fw-bold">🚀 <span data-i18n="wdSubmit">Cairkan Sekarang</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const i18n = {
+            id: {
+                totalBalance: "💰 Total Balance:", totalLifetime: "🏆 Total Lifetime:", globalNodes: "📡 Global Nodes:", manageAcc: "⚙️ Kelola Akun ({{ accounts|length }})",
+                autoRef: "Auto-refresh:", min1: "1 Menit", min2: "2 Menit", min5: "5 Menit", min10: "10 Menit", manual: "Manual", refresh: "🔄 Refresh",
+                addAccTitle: "➕ Tambah Akun EarnApp Baru", accNamePlaceholder: "🏷️ Nama Akun", cookiePlaceholder: "🍪 Paste Full Cookie EarnApp di sini...", saveAccBtn: "💾 Simpan Akun",
+                regAccTitle: "📋 Daftar Akun Terdaftar", tblAccName: "Nama Akun", tblAction: "Aksi", btnDelete: "🗑️ Hapus",
+                loadingText: "⏳ Sedang memanen data dari semua akun EarnApp...",
+                wdTitle: "💸 Pencairan Dana (Withdraw)", wdSelAcc: "Akun Terpilih", wdBal: "Saldo Tersedia",
+                wdMinWarn: "⚠️ Saldo akun ini masih di bawah batas minimal penarikan EarnApp (<strong>$2.50</strong>).",
+                wdMethod: "📧 Metode Pencairan", wdEmailLbl: "📩 Email PayPal Tujuan", wdEmailPlace: "contoh: email_kamu@gmail.com",
+                wdEmailNote: "*Email otomatis tersimpan di browser.", wdCancel: "Batal", wdSubmit: "Cairkan Sekarang",
+                txtErr: "⚠️ Error:", txtUsage: "⏱️ Usage:", txtLifetime: "🏆 Lifetime:", btnWd: "💸 Withdraw",
+                chartGlobal: "📈 Tren Global (7 Hari Terakhir)", chartTop: "🏆 Top Node", chartHist: "📈 Riwayat Saldo (30 Hari)", chartDays: "Hari Online", chartHours: "Jam Kerja",
+                tblNode: "🖥️ Node", tblCountry: "🌍 Negara", tblEarned: "💵 Earned", tblStatus: "📡 Status", txtTot: "Tot:", txtTotal: "Total:",
+                errEmailReq: "❌ Masukkan alamat email PayPal terlebih dahulu!", msgProcess: "⏳ Memproses...",
+                msgWdWait: "⏳ Menghubungi server EarnApp...", errWdFail: "❌ Gagal menghubungi server aplikasi.",
+                filterAll: "Semua", filterOnline: "Online", filterOffline: "Offline", filterBlocked: "Blocked", btnExport: "📥 CSV"
+            },
+            en: {
+                totalBalance: "💰 Total Balance:", totalLifetime: "🏆 Total Lifetime:", globalNodes: "📡 Global Nodes:", manageAcc: "⚙️ Manage Accounts ({{ accounts|length }})",
+                autoRef: "Auto-refresh:", min1: "1 Minute", min2: "2 Minutes", min5: "5 Minutes", min10: "10 Minutes", manual: "Manual", refresh: "🔄 Refresh",
+                addAccTitle: "➕ Add New EarnApp Account", accNamePlaceholder: "🏷️ Account Name", cookiePlaceholder: "🍪 Paste Full EarnApp Cookie here...", saveAccBtn: "💾 Save Account",
+                regAccTitle: "📋 Registered Accounts", tblAccName: "Account Name", tblAction: "Action", btnDelete: "🗑️ Delete",
+                loadingText: "⏳ Harvesting data from all EarnApp accounts...",
+                wdTitle: "💸 Withdraw Funds", wdSelAcc: "Selected Account", wdBal: "Available Balance",
+                wdMinWarn: "⚠️ Balance is below the minimum withdrawal limit (<strong>$2.50</strong>).",
+                wdMethod: "📧 Withdrawal Method", wdEmailLbl: "📩 Target PayPal Email", wdEmailPlace: "e.g.: your_email@gmail.com",
+                wdEmailNote: "*Email is automatically saved in browser.", wdCancel: "Cancel", wdSubmit: "Withdraw Now",
+                txtErr: "⚠️ Error:", txtUsage: "⏱️ Usage:", txtLifetime: "🏆 Lifetime:", btnWd: "💸 Withdraw",
+                chartGlobal: "📈 Global Trend (Last 7 Days)", chartTop: "🏆 Top Node", chartHist: "📈 Balance History (30 Days)", chartDays: "Days Online", chartHours: "Hours Worked",
+                tblNode: "🖥️ Node", tblCountry: "🌍 Country", tblEarned: "💵 Earned", tblStatus: "📡 Status", txtTot: "Tot:", txtTotal: "Total:",
+                errEmailReq: "❌ Please enter your PayPal email first!", msgProcess: "⏳ Processing...",
+                msgWdWait: "⏳ Contacting EarnApp server...", errWdFail: "❌ Failed to contact application server.",
+                filterAll: "All", filterOnline: "Online", filterOffline: "Offline", filterBlocked: "Blocked", btnExport: "📥 CSV"
+            }
+        };
+
+        let currentLang = localStorage.getItem('earnapp_lang') || 'id';
+        let chartInstances = {};
+        let withdrawModalInstance = null;
+        let refreshTimer = null;
+        let T = i18n[currentLang];
+        window.appData = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById('langSelector').value = currentLang;
+            const savedInterval = localStorage.getItem('earnapp_refresh_interval');
+            if (savedInterval !== null) document.getElementById('refreshInterval').value = savedInterval;
+            applyTranslations();
+            withdrawModalInstance = new bootstrap.Modal(document.getElementById('withdrawModal'));
+            const savedEmail = localStorage.getItem('earnapp_paypal_email');
+            if (savedEmail) document.getElementById('wdEmail').value = savedEmail;
+            startRefreshTimer();
+            fetchStats();
+        });
+
+        function changeLanguage() {
+            currentLang = document.getElementById('langSelector').value;
+            localStorage.setItem('earnapp_lang', currentLang);
+            T = i18n[currentLang];
+            applyTranslations();
+            fetchStats();
+        }
+
+        function applyTranslations() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const k = el.getAttribute('data-i18n');
+                if (T[k]) el.innerHTML = T[k];
+            });
+            document.getElementById('btnManageAcc').innerHTML = T.manageAcc;
+            document.getElementById('inputAccName').placeholder = T.accNamePlaceholder;
+            document.getElementById('inputCookie').placeholder = T.cookiePlaceholder;
+            document.getElementById('wdEmail').placeholder = T.wdEmailPlace;
+            const lt = document.getElementById('loadingText');
+            if (lt) lt.innerText = T.loadingText;
+        }
+
+        function updateRefreshInterval() {
+            localStorage.setItem('earnapp_refresh_interval', document.getElementById('refreshInterval').value);
+            startRefreshTimer();
+        }
+        function startRefreshTimer() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            const v = parseInt(document.getElementById('refreshInterval').value);
+            if (v > 0) refreshTimer = setInterval(fetchStats, v);
+        }
+
+        function openWithdrawModal(accId, accName, balance) {
+            document.getElementById('wdAccId').value = accId;
+            document.getElementById('wdAccName').innerText = '🦊 ' + accName;
+            document.getElementById('wdAccBalance').innerText = '$' + balance.toFixed(2);
+            const sa = document.getElementById('wdStatusAlert');
+            sa.className = 'alert d-none mb-0 py-2 small'; sa.innerText = '';
+            const mw = document.getElementById('wdMinWarning');
+            const sb = document.getElementById('wdSubmitBtn');
+            if (balance < 2.5) { mw.classList.remove('d-none'); sb.disabled = true; }
+            else { mw.classList.add('d-none'); sb.disabled = false; }
+            withdrawModalInstance.show();
+        }
+
+        async function submitWithdraw() {
+            const accId = document.getElementById('wdAccId').value;
+            const email = document.getElementById('wdEmail').value.trim();
+            const method = document.getElementById('wdMethod').value;
+            const sa = document.getElementById('wdStatusAlert');
+            const sb = document.getElementById('wdSubmitBtn');
+            if (!email) { sa.className = 'alert alert-danger mb-0 py-2 small'; sa.innerText = T.errEmailReq; return; }
+            localStorage.setItem('earnapp_paypal_email', email);
+            sb.disabled = true; sb.innerHTML = `🚀 ${T.msgProcess}`;
+            sa.className = 'alert alert-info mb-0 py-2 small'; sa.innerText = T.msgWdWait;
+            try {
+                const res = await fetch('/api/withdraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acc_id: accId, email, payment_method: method }) });
+                const r = await res.json();
+                sa.className = `alert alert-${r.success ? 'success' : 'danger'} mb-0 py-2 small`;
+                sa.innerText = (r.success ? '✅ ' : '❌ ') + r.message;
+                if (r.success) fetchStats(); else sb.disabled = false;
+            } catch (e) {
+                sa.className = 'alert alert-danger mb-0 py-2 small'; sa.innerText = T.errWdFail; sb.disabled = false;
+            } finally { sb.innerHTML = `🚀 ${T.wdSubmit}`; }
+        }
+
+        function filterNodes(accId, status) {
+            document.querySelectorAll(`.btn-filter-${accId}`).forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-outline-secondary'); });
+            const btn = document.getElementById(`btnFilter_${accId}_${status}`);
+            if (btn) { btn.classList.remove('btn-outline-secondary'); btn.classList.add('btn-primary'); }
+            document.querySelectorAll(`.row-node-${accId}`).forEach(row => {
+                row.style.display = (status === 'all' || row.dataset.status === status) ? '' : 'none';
+            });
+        }
+
+        function exportCSV(accId) {
+            const acc = window.appData.find(a => a.id === accId);
+            if (!acc) return;
+            let csv = 'Node Name,Country,IP Address,Usage (Current),Total Usage,Earned (Current $),Total Earned ($),Status,Reason\n';
+            acc.devices.forEach(d => {
+                csv += `"${d.name}","${d.country}","${(d.ips || []).join(' | ')}","${d.uptime}","${d.total_uptime}","${d.earned}","${d.earned_total}","${(d.status || '').toUpperCase()}","${d.error_reason || ''}"\n`;
+            });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+            link.download = `EarnApp_Nodes_${acc.name.replace(/[^a-z0-9]/gi, '_')}.csv`;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function destroyCharts() {
+            Object.values(chartInstances).forEach(c => c.destroy());
+            chartInstances = {};
+        }
+
+        async function fetchStats() {
+            try {
+                const response = await fetch('/api/stats');
+                if (response.status === 401 || response.redirected) { window.location.href = '/login'; return; }
+                if (!response.ok) throw new Error(`HTTP ${response.status} - Cek log service di manager.sh (Menu 7)`);
+                const data = await response.json();
+                window.appData = data.accounts || [];
+
+                document.getElementById('globalBalance').innerText = (data.total_balance || 0).toFixed(2);
+                document.getElementById('globalLifetime').innerText = (data.total_lifetime || 0).toFixed(2);
+                document.getElementById('globalOnline').innerText = data.total_online || 0;
+                document.getElementById('globalTotal').innerText = data.total_nodes || 0;
+
+                destroyCharts();
+                if (window.appData.length === 0) {
+                    document.getElementById('dashboardContent').innerHTML = `<div class="col-12"><div class="card p-4 text-center text-secondary">Belum ada akun EarnApp. Klik <b>⚙️ Kelola Akun</b> di atas untuk menambahkan akun.</div></div>`;
+                    return;
+                }
+
+                let html = '';
+                window.appData.forEach(acc => {
+                    if (acc.error) {
+                        html += `<div class="col-12"><div class="card border-danger p-3"><h5>😿 ${acc.name}</h5><p class="text-danger mb-0">${T.txtErr} ${acc.error}</p></div></div>`;
+                        return;
+                    }
+                    const blockedCount = acc.blocked_nodes !== undefined ? acc.blocked_nodes : (acc.banned_nodes || 0);
+                    const warnBadge = blockedCount > 0 ? `<span class="badge badge-blocked ms-1">⚠️ ${blockedCount} Blocked</span>` : '';
+                    const wdBtnClass = acc.balance >= 2.5 ? 'btn-withdraw' : 'btn-withdraw-low';
+                    const safeName = acc.name.replace(/'/g, "\\'");
+
+                    html += `
+                    <div class="col-12"><div class="card p-3 h-100">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
+                            <div>
+                                <h5 class="mb-1 fw-bold text-info">🦊 ${acc.name}</h5>
+                                <div class="d-flex flex-wrap gap-2 align-items-center small">
+                                    <span class="badge badge-online">🟢 ${acc.active_nodes} / ${acc.total_nodes} Online</span>
+                                    ${warnBadge}
+                                    <span class="text-secondary">${T.txtUsage} <strong class="text-light">${acc.total_usage}</strong></span>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="text-end me-3">
+                                    <div class="fs-4 fw-bold text-success">💰 $${acc.balance.toFixed(2)}</div>
+                                    <small class="text-warning">${T.txtLifetime} $${acc.lifetime.toFixed(2)}</small>
+                                </div>
+                                <button onclick="exportCSV(${acc.id})" class="btn btn-sm btn-outline-info rounded-3 px-3 py-2 fw-bold">${T.btnExport}</button>
+                                <button onclick="openWithdrawModal(${acc.id}, '${safeName}', ${acc.balance})" class="btn btn-sm ${wdBtnClass} rounded-3 px-3 py-2">${T.btnWd}</button>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-4"><div class="chart-box"><div class="small fw-semibold mb-1 text-light">${T.chartGlobal}</div><canvas id="chartGlobal_${acc.id}"></canvas></div></div>
+                            <div class="col-md-4"><div class="chart-box"><div class="small fw-semibold mb-1 text-light">${T.chartHist}</div><canvas id="chartHist_${acc.id}"></canvas></div></div>
+                            <div class="col-md-4"><div class="chart-box"><div class="small fw-semibold mb-1 text-light">${T.chartTop} (${acc.chart_top.date})</div><canvas id="chartTop_${acc.id}"></canvas></div></div>
+                        </div>
+                        <div class="d-flex flex-wrap justify-content-between align-items-end mb-2 mt-3">
+                            <div class="small fw-semibold text-light mb-1">${T.tblNode} List</div>
+                            <div class="btn-group btn-group-sm mb-1" role="group">
+                                <button id="btnFilter_${acc.id}_all" onclick="filterNodes(${acc.id}, 'all')" class="btn btn-primary btn-filter-${acc.id}">${T.filterAll}</button>
+                                <button id="btnFilter_${acc.id}_online" onclick="filterNodes(${acc.id}, 'online')" class="btn btn-outline-secondary btn-filter-${acc.id}">${T.filterOnline}</button>
+                                <button id="btnFilter_${acc.id}_offline" onclick="filterNodes(${acc.id}, 'offline')" class="btn btn-outline-secondary btn-filter-${acc.id}">${T.filterOffline}</button>
+                                <button id="btnFilter_${acc.id}_blocked" onclick="filterNodes(${acc.id}, 'blocked')" class="btn btn-outline-secondary btn-filter-${acc.id}">${T.filterBlocked} (${blockedCount})</button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="table table-sm table-dark table-striped align-middle">
+                                <thead class="sticky-top" style="background-color: #11111b;">
+                                    <tr class="text-secondary small"><th class="ps-3">${T.tblNode}</th><th>${T.tblCountry}</th><th>🌐 IP Address</th><th>${T.txtUsage}</th><th>${T.tblEarned}</th><th class="text-center pe-3">${T.tblStatus}</th></tr>
+                                </thead>
+                                <tbody id="tbody_${acc.id}">`;
+
+                    acc.devices.forEach(dev => {
+                        const st = dev.status === 'banned' ? 'blocked' : dev.status;
+                        let statusBadge = `<span class="badge badge-offline">🔴 OFFLINE</span>`;
+                        if (st === 'online') statusBadge = `<span class="badge badge-online">🟢 ONLINE</span>`;
+                        else if (st === 'blocked') {
+                            const rLbl = dev.error_reason ? `<small class="text-warning d-block mt-1" style="font-size:0.7rem;">${dev.error_reason}</small>` : '';
+                            statusBadge = `<span class="badge badge-blocked" title="${dev.error_reason || 'IP Blocked'}">⚠️ BLOCKED</span>${rLbl}`;
+                        }
+                        const ipHtml = (dev.ips && dev.ips.length > 0) ? dev.ips.map(ip => `<span class="ip-chip">${ip}</span>`).join(' ') : '<span class="text-muted small">-</span>';
+                        html += `
+                        <tr class="row-node-${acc.id}" data-status="${st}">
+                            <td class="ps-3 fw-semibold text-nowrap">${dev.name}</td>
+                            <td class="text-nowrap"><span class="badge bg-dark border border-secondary text-info">${dev.country}</span></td>
+                            <td>${ipHtml}</td>
+                            <td class="text-nowrap"><span class="text-info">${dev.uptime}</span><small class="text-secondary d-block" style="font-size:0.72rem;">${T.txtTotal} ${dev.total_uptime}</small></td>
+                            <td class="text-nowrap"><span class="fw-bold text-success">$${dev.earned.toFixed(2)}</span><small class="text-secondary d-block" style="font-size:0.72rem;">${T.txtTot} $${dev.earned_total.toFixed(2)}</small></td>
+                            <td class="text-center pe-3">${statusBadge}</td>
+                        </tr>`;
+                    });
+                    html += `</tbody></table></div></div></div>`;
+                });
+                document.getElementById('dashboardContent').innerHTML = html;
+
+                window.appData.forEach(acc => {
+                    if (acc.error) return;
+                    const baseOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, layout: { padding: { bottom: 18 } } };
+                    const cg = document.getElementById(`chartGlobal_${acc.id}`);
+                    if (cg) chartInstances[`g_${acc.id}`] = new Chart(cg, { type: 'line', data: { labels: acc.chart_global.labels, datasets: [{ label: T.chartDays, data: acc.chart_global.values, borderColor: '#a6e3a1', backgroundColor: 'rgba(166,227,161,0.15)', borderWidth: 2, pointRadius: 3, fill: true, tension: 0.3 }] }, options: { ...baseOpts, scales: { x: { ticks: { color: '#a6adc8', font: { size: 10 } }, grid: { color: '#313244' } }, y: { ticks: { color: '#a6adc8', font: { size: 10 } }, grid: { color: '#313244' }, beginAtZero: true } } } });
+                    const ch = document.getElementById(`chartHist_${acc.id}`);
+                    if (ch) chartInstances[`h_${acc.id}`] = new Chart(ch, { type: 'line', data: { labels: acc.chart_history.labels, datasets: [{ label: 'Balance ($)', data: acc.chart_history.values, borderColor: '#f9e2af', backgroundColor: 'rgba(249,226,175,0.15)', borderWidth: 2, pointRadius: 3, fill: true, tension: 0.3 }] }, options: { ...baseOpts, scales: { x: { ticks: { color: '#a6adc8', font: { size: 10 } }, grid: { color: '#313244' } }, y: { ticks: { color: '#a6adc8', font: { size: 10 } }, grid: { color: '#313244' }, beginAtZero: false } } } });
+                    const ct = document.getElementById(`chartTop_${acc.id}`);
+                    if (ct) chartInstances[`t_${acc.id}`] = new Chart(ct, { type: 'bar', data: { labels: acc.chart_top.labels, datasets: [{ label: T.chartHours, data: acc.chart_top.values, backgroundColor: '#89b4fa', borderRadius: 4 }] }, options: { ...baseOpts, indexAxis: 'y', scales: { x: { ticks: { color: '#a6adc8', font: { size: 10 } }, grid: { color: '#313244' }, beginAtZero: true }, y: { ticks: { color: '#cdd6f4', font: { size: 10 } }, grid: { display: false } } } } });
+                });
+            } catch (error) {
+                document.getElementById('dashboardContent').innerHTML = `<div class="col-12"><div class="card border-danger p-4 text-center"><h5 class="text-danger">⚠️ Gagal Memuat Data</h5><p class="text-light mb-0">${error.message}</p></div></div>`;
+            }
+        }
+    </script>
+</body>
+</html>
