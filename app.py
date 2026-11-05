@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, render_template_string
-import sqlite3, requests, re, datetime, urllib.parse, os, json, threading, time
+import sqlite3, requests, re, datetime, urllib.parse, os, json, threading, time, concurrent.futures
 from functools import wraps
 
 app = Flask(__name__)
@@ -17,12 +17,12 @@ init_db()
 
 def format_waktu(raw_val):
 try:
-    if raw_val is None: return "-"
+    if raw_val is None: return "0m"
     s = int(raw_val) // 1000; d = s // 86400; h = (s % 86400) // 3600; m = (s % 3600) // 60
     if d > 0: return f"{d}d {h}h"
     if h > 0: return f"{h}h {m}m"
     return f"{m}m"
-except: return "-"
+except: return "0m"
 
 def format_waktu_detik(seconds):
 try:
@@ -91,6 +91,12 @@ def delete_account(acc_id):
 with sqlite3.connect(DB_FILE) as conn: conn.execute('DELETE FROM accounts WHERE id = ?', (acc_id,)); conn.execute('DELETE FROM history WHERE account_id = ?', (acc_id,))
 return redirect(url_for('index'))
 
+def trigger_gost_failover(node_name, detected_ip):
+try:
+    match = re.search(r'W(\d+)', str(node_name), re.IGNORECASE)
+    if match: requests.post(f"{GOST_API_URL}/api/failover", json={"port": 1080 + int(match.group(1))}, timeout=5)
+except: pass
+
 @app.route('/api/stats')
 @login_required
 def api_stats():
@@ -98,37 +104,38 @@ with sqlite3.connect(DB_FILE) as conn: accounts = conn.execute('SELECT id, name,
 dash = {"total_balance": 0, "total_lifetime": 0, "total_online": 0, "total_nodes": 0, "accounts": []}
 curr = datetime.datetime.now().strftime("%Y-%m-%d")
 
-def trigger_gost_failover(node_name, detected_ip):
-    try:
-        match = re.search(r'W(\d+)', str(node_name), re.IGNORECASE)
-        if match: requests.post(f"{GOST_API_URL}/api/failover", json={"port": 1080 + int(match.group(1))}, timeout=5)
-    except: pass
-
 BLOCK_KEYWORDS = ["blocked", "ip_blocked", "banned", "vpn", "low quality", "low_quality", "not earning", "not_earning", "proxy", "datacenter", "hosting", "blacklisted", "abuse", "restricted", "suspended"]
 ERROR_KEYS = {"error", "error_reason", "err", "reason", "ban_reason", "block_reason", "message", "msg", "problem", "warning", "alert", "status_reason"}
 BOOL_BLOCK_KEYS = {"ip_blocked", "blocked", "is_blocked", "banned", "is_banned", "vpn", "is_vpn", "proxy", "is_proxy", "low_quality"}
 
-for acc in accounts:
+def fetch_account(acc):
+    acc_id, acc_name, acc_cookie = acc
     try:
-        head = get_headers(acc[2])
-        rm = requests.get("https://earnapp.com/dashboard/api/money?appid=earnapp", headers=head, timeout=15).json()
+        head = get_headers(acc_cookie)
+        
+        # CEK KONEKSI & CLOUDFLARE DENGAN TIMEOUT KETAT 8 DETIK
+        rm_req = requests.get("https://earnapp.com/dashboard/api/money?appid=earnapp", headers=head, timeout=8)
+        if rm_req.status_code != 200:
+            raise Exception(f"EarnApp HTTP {rm_req.status_code}. (Cookie kedaluwarsa atau IP Cloudflare Blocked).")
+        
+        rm = rm_req.json()
         bal = float(rm.get('balance', 0) or 0)
         life = float(rm.get('earnings_total', rm.get('total_earnings', 0)) or 0)
-        dash["total_balance"] += bal; dash["total_lifetime"] += life
         
         try:
-            with sqlite3.connect(DB_FILE) as c_hist:
-                c_hist.execute('INSERT OR REPLACE INTO history (account_id, date, balance, lifetime) VALUES (?, ?, ?, ?)', (acc[0], curr, bal, life))
+            with sqlite3.connect(DB_FILE, timeout=5) as c_hist:
+                c_hist.execute('INSERT OR REPLACE INTO history (account_id, date, balance, lifetime) VALUES (?, ?, ?, ?)', (acc_id, curr, bal, life))
         except: pass
             
-        rd = requests.get("https://earnapp.com/dashboard/api/devices?appid=earnapp", headers=head, timeout=15).json()
+        rd_req = requests.get("https://earnapp.com/dashboard/api/devices?appid=earnapp", headers=head, timeout=8)
+        rd = rd_req.json() if rd_req.status_code == 200 else []
         if not isinstance(rd, list): rd = []
         
         uuids = {"devices": [{"uuid": d['uuid'], "appid": d.get('appid', 'node_earnapp.com')} for d in rd if isinstance(d, dict) and 'uuid' in d]}
         st_map = {}
         if uuids["devices"]:
             try:
-                rs = requests.post("https://earnapp.com/dashboard/api/device_statuses?appid=earnapp", headers=head, json=uuids, timeout=15)
+                rs = requests.post("https://earnapp.com/dashboard/api/device_statuses?appid=earnapp", headers=head, json=uuids, timeout=8)
                 if rs.status_code == 200:
                     r_json = rs.json()
                     if isinstance(r_json, dict): st_map = r_json.get("statuses", r_json.get("devices", r_json))
@@ -195,9 +202,22 @@ for acc in accounts:
         dev_info.sort(key=lambda x: natural_key(x['name']))
         ac = sum(1 for x in dev_info if x['status'] == 'online')
         bc = sum(1 for x in dev_info if x['status'] == 'blocked')
-        dash["total_online"] += ac; dash["total_nodes"] += len(dev_info)
-        dash["accounts"].append({"id": acc[0], "name": acc[1], "balance": bal, "lifetime": life, "total_usage": format_waktu(up_ms), "devices": dev_info, "active_nodes": ac, "blocked_nodes": bc, "total_nodes": len(dev_info)})
-    except Exception as e: dash["accounts"].append({"id": acc[0], "name": acc[1], "error": str(e)})
+        return {"success": True, "data": {"id": acc_id, "name": acc_name, "balance": bal, "lifetime": life, "total_usage": format_waktu(up_ms), "devices": dev_info, "active_nodes": ac, "blocked_nodes": bc, "total_nodes": len(dev_info)}}
+    
+    except Exception as e: 
+        return {"success": False, "data": {"id": acc_id, "name": acc_name, "error": f"API EarnApp Error: {str(e)}"}}
+
+# JALANKAN SEMUA AKUN SECARA BERSAMAAN (PARALLEL MULTITHREADING)
+with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    results = list(executor.map(fetch_account, accounts))
+
+for res in results:
+    dash["accounts"].append(res["data"])
+    if res["success"]:
+        dash["total_balance"] += res["data"].get("balance", 0)
+        dash["total_lifetime"] += res["data"].get("lifetime", 0)
+        dash["total_online"] += res["data"].get("active_nodes", 0)
+        dash["total_nodes"] += res["data"].get("total_nodes", 0)
 
 return jsonify(dash)
 
