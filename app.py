@@ -1,21 +1,12 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, render_template_string
-import sqlite3
-import requests
-import re
-import datetime
-import urllib.parse
+import sqlite3, requests, re, datetime, urllib.parse, os, json, threading
 from functools import wraps
-import threading
-import os
-import json
 
 app = Flask(__name__)
 app.secret_key = "rahasia_earnapp_super_aman_123"
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin"
-
+ADMIN_USERNAME, ADMIN_PASSWORD = "admin", "admin"
 DB_FILE = "/root/earnapp-web/earnapp.db"
-GOST_API_URL = "http://127.0.0.1:5001/api/failover"
+GOST_API_URL = "http://127.0.0.1:5001"
 GOST_DIR = "/opt/gost-proxy"
 
 def init_db():
@@ -33,90 +24,17 @@ def format_waktu(raw_val):
         return f"{m}m"
     except: return "0m"
 
-def natural_key(text):
-    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(text))]
+def natural_key(text): return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(text))]
 
 def get_headers(cookie):
     csrf_match = re.search(r'xsrf-token=([^;]+)', cookie)
     csrf_token = urllib.parse.unquote(csrf_match.group(1)) if csrf_match else ""
     return {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-        "Origin": "https://earnapp.com",
-        "Referer": "https://earnapp.com/dashboard/me/passive-income",
-        "xsrf-token": csrf_token,
-        "Cookie": cookie
+        "User-Agent": "Mozilla/5.0", "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest",
+        "Origin": "https://earnapp.com", "Referer": "https://earnapp.com/dashboard/me/passive-income",
+        "xsrf-token": csrf_token, "Cookie": cookie
     }
-
-def trigger_gost_failover(node_name, detected_ip):
-    try:
-        match = re.search(r'W(\d+)', str(node_name), re.IGNORECASE)
-        if match:
-            idx = int(match.group(1))
-            target_port = 1080 + idx
-            payload = {"port": target_port}
-            res = requests.post(GOST_API_URL, json=payload, timeout=5)
-            if res.status_code == 200:
-                print(f"[AUTO-HEAL] Node {node_name} Blocked. GOST Failover dipicu!")
-    except Exception as e:
-        print(f"[AUTO-HEAL] Error API GOST: {e}")
-
-BLOCK_KEYWORDS = ["blocked", "ip_blocked", "banned", "vpn", "low quality", "low_quality", "not earning", "not_earning", "proxy", "datacenter", "hosting", "blacklisted", "abuse", "restricted", "suspended"]
-ERROR_KEYS = {"error", "error_reason", "err", "reason", "ban_reason", "block_reason", "message", "msg", "problem", "warning", "alert", "status_reason"}
-BOOL_BLOCK_KEYS = {"ip_blocked", "blocked", "is_blocked", "banned", "is_banned", "vpn", "is_vpn", "proxy", "is_proxy", "low_quality"}
-
-def analyze_device_status(dev_dict, raw_st):
-    reasons = []
-    is_blocked, is_online, detected_ip = False, False, ""
-    def scan_obj(obj, ignore_keys=()):
-        nonlocal is_blocked, is_online, detected_ip
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                k_low = str(k).lower()
-                if k_low in ignore_keys or v is None: continue
-                if k_low in ("ip", "detected_ip", "current_ip", "remote_ip") and isinstance(v, str) and v.strip(): detected_ip = v.strip()
-                if k_low in BOOL_BLOCK_KEYS:
-                    if v is True or str(v).lower() in ("true", "1", "yes"):
-                        is_blocked = True; reasons.append(k_low.replace("_", " ").title())
-                    continue
-                if k_low in ("online", "is_online") and (v is True or str(v).lower() == "true"): is_online = True
-                if k_low in ERROR_KEYS:
-                    if isinstance(v, str) and v.strip() and v.strip().lower() not in ("none", "null", "false", "0", "ok"):
-                        is_blocked = True; reasons.append(v.strip())
-                    elif isinstance(v, (dict, list)): scan_obj(v)
-                    continue
-                if isinstance(v, str):
-                    v_low = v.strip().lower()
-                    if any(kw in v_low for kw in BLOCK_KEYWORDS):
-                        is_blocked = True; reasons.append(v.strip())
-                    elif k_low in ("status", "state", "mode") and ("online" in v_low or v_low.isdigit()): is_online = True
-                elif isinstance(v, (dict, list)): scan_obj(v)
-        elif isinstance(obj, list):
-            for item in obj: scan_obj(item, ignore_keys)
-        elif isinstance(obj, str):
-            v_low = obj.strip().lower()
-            if any(kw in v_low for kw in BLOCK_KEYWORDS): is_blocked = True; reasons.append(obj.strip())
-            elif "online" in v_low or v_low.isdigit(): is_online = True
-        elif isinstance(obj, (int, float)) and not isinstance(obj, bool):
-            if obj > 0: is_online = True
-
-    scan_obj(raw_st)
-    scan_obj(dev_dict, ignore_keys=("title", "name", "uuid", "appid", "ips", "country", "rate", "bw", "total_bw", "redeem_bw", "earned", "earned_total", "uptime", "total_uptime", "online_time", "total_online_time"))
-
-    if is_blocked:
-        clean_reasons = []
-        for r in reasons:
-            if r not in clean_reasons: clean_reasons.append(r)
-        reason_text = " | ".join(clean_reasons) if clean_reasons else "IP Blocked / VPN"
-        if detected_ip and detected_ip not in reason_text: reason_text = f"{reason_text} ({detected_ip})"
-        
-        node_title = dev_dict.get('title', dev_dict.get('name', ''))
-        if node_title: threading.Thread(target=trigger_gost_failover, args=(node_title, detected_ip), daemon=True).start()
-        return "blocked", reason_text, detected_ip
-    elif is_online: return "online", "", detected_ip
-    else: return "offline", "", detected_ip
 
 def login_required(f):
     @wraps(f)
@@ -133,37 +51,17 @@ def login():
     if request.method == 'POST':
         if request.form.get('username') == ADMIN_USERNAME and request.form.get('password') == ADMIN_PASSWORD:
             session['logged_in'] = True; return redirect(url_for('index'))
-        else: error = "Username atau Password salah! Akses ditolak."
+        else: error = "Username atau Password salah!"
     
     login_html = """
-    <!DOCTYPE html>
-    <html lang="id" data-bs-theme="dark">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Login - Multi-Account Monitoring</title>
-        <link rel="icon" href="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" type="image/png">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>body { background-color: #11111b; color: #cdd6f4; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }</style>
-    </head>
-    <body>
-        <div class="card p-4 shadow-lg" style="background-color: #1e1e2e; border: 1px solid #313244; width: 100%; max-width: 380px; border-radius: 16px;">
-            <div class="text-center mb-4"><img src="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" alt="Logo" style="width: 60px; height: 60px; margin-bottom: 10px;"><h4 class="fw-bold text-light">Secure Access</h4></div>
-            {% if error %}<div class="alert alert-danger p-2 small text-center mb-3">{{ error }}</div>{% endif %}
-            <form method="POST">
-                <input type="text" name="username" class="form-control mb-2 text-center" style="background-color: #181825; border-color: #313244; color: white;" placeholder="Username" required autofocus>
-                <input type="password" name="password" class="form-control mb-4 text-center" style="background-color: #181825; border-color: #313244; color: white;" placeholder="Password" required>
-                <button type="submit" class="btn btn-primary w-100 fw-bold">Login Dashboard</button>
-            </form>
-        </div>
-    </body>
-    </html>
+    <!DOCTYPE html><html lang="id" data-bs-theme="dark"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Login - Multi-Account Monitoring</title><link rel="icon" href="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" type="image/png"><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"><style>body { background-color: #11111b; color: #cdd6f4; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }</style></head>
+    <body><div class="card p-4 shadow-lg" style="background-color: #1e1e2e; border: 1px solid #313244; width: 100%; max-width: 380px; border-radius: 16px;"><div class="text-center mb-4"><img src="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" alt="Logo" style="width: 60px; height: 60px; margin-bottom: 10px;"><h4 class="fw-bold text-light">Secure Access</h4></div>{% if error %}<div class="alert alert-danger p-2 small text-center mb-3">{{ error }}</div>{% endif %}
+    <form method="POST"><input type="text" name="username" class="form-control mb-2 text-center" style="background-color: #181825; border-color: #313244; color: white;" placeholder="Username" required autofocus><input type="password" name="password" class="form-control mb-4 text-center" style="background-color: #181825; border-color: #313244; color: white;" placeholder="Password" required><button type="submit" class="btn btn-primary w-100 fw-bold">Login Dashboard</button></form></div></body></html>
     """
     return render_template_string(login_html, error=error)
 
 @app.route('/logout')
-def logout():
-    session.pop('logged_in', None); return redirect(url_for('login'))
+def logout(): session.pop('logged_in', None); return redirect(url_for('login'))
 
 @app.route('/')
 @login_required
@@ -182,9 +80,7 @@ def add_account():
 @app.route('/delete_account/<int:acc_id>')
 @login_required
 def delete_account(acc_id):
-    with sqlite3.connect(DB_FILE) as conn:
-        conn.execute('DELETE FROM accounts WHERE id = ?', (acc_id,))
-        conn.execute('DELETE FROM history WHERE account_id = ?', (acc_id,))
+    with sqlite3.connect(DB_FILE) as conn: conn.execute('DELETE FROM accounts WHERE id = ?', (acc_id,)); conn.execute('DELETE FROM history WHERE account_id = ?', (acc_id,))
     return redirect(url_for('index'))
 
 @app.route('/api/withdraw', methods=['POST'])
@@ -209,6 +105,17 @@ def api_stats():
     with sqlite3.connect(DB_FILE) as conn: accounts = conn.execute('SELECT id, name, cookie FROM accounts').fetchall()
     dash = {"total_balance": 0, "total_lifetime": 0, "total_online": 0, "total_nodes": 0, "accounts": []}
     curr = datetime.datetime.now().strftime("%Y-%m-%d")
+
+    def trigger_gost_failover(node_name, detected_ip):
+        try:
+            match = re.search(r'W(\d+)', str(node_name), re.IGNORECASE)
+            if match:
+                requests.post(f"{GOST_API_URL}/api/failover", json={"port": 1080 + int(match.group(1))}, timeout=5)
+        except: pass
+
+    BLOCK_KEYWORDS = ["blocked", "ip_blocked", "banned", "vpn", "low quality", "low_quality", "not earning", "not_earning", "proxy", "datacenter", "hosting", "blacklisted", "abuse", "restricted", "suspended"]
+    ERROR_KEYS = {"error", "error_reason", "err", "reason", "ban_reason", "block_reason", "message", "msg", "problem", "warning", "alert", "status_reason"}
+    BOOL_BLOCK_KEYS = {"ip_blocked", "blocked", "is_blocked", "banned", "is_banned", "vpn", "is_vpn", "proxy", "is_proxy", "low_quality"}
 
     for acc in accounts:
         try:
@@ -236,7 +143,51 @@ def api_stats():
             dev_info, up_ms = [], 0
             for d in rd:
                 if not isinstance(d, dict): continue
-                st, err, d_ip = analyze_device_status(d, st_map.get(d.get('uuid'), {}))
+                raw_st = st_map.get(d.get('uuid'), {})
+                reasons, is_blk, is_on, d_ip = [], False, False, ""
+                
+                def scan_obj(obj, ignore_keys=()):
+                    nonlocal is_blk, is_on, d_ip
+                    if isinstance(obj, dict):
+                        for k, v in obj.items():
+                            kl = str(k).lower()
+                            if kl in ignore_keys or v is None: continue
+                            if kl in ("ip", "detected_ip", "current_ip") and isinstance(v, str) and v.strip(): d_ip = v.strip()
+                            if kl in BOOL_BLOCK_KEYS:
+                                if v is True or str(v).lower() in ("true", "1", "yes"): is_blk = True; reasons.append(kl.replace("_", " ").title())
+                                continue
+                            if kl in ("online", "is_online") and (v is True or str(v).lower() == "true"): is_on = True
+                            if kl in ERROR_KEYS:
+                                if isinstance(v, str) and v.strip() and v.strip().lower() not in ("none", "null", "false", "0", "ok"): is_blk = True; reasons.append(v.strip())
+                                elif isinstance(v, (dict, list)): scan_obj(v)
+                                continue
+                            if isinstance(v, str):
+                                vl = v.strip().lower()
+                                if any(kw in vl for kw in BLOCK_KEYWORDS): is_blk = True; reasons.append(v.strip())
+                                elif kl in ("status", "state") and ("online" in vl or vl.isdigit()): is_on = True
+                            elif isinstance(v, (dict, list)): scan_obj(v)
+                    elif isinstance(obj, list):
+                        for item in obj: scan_obj(item, ignore_keys)
+                    elif isinstance(obj, str):
+                        vl = obj.strip().lower()
+                        if any(kw in vl for kw in BLOCK_KEYWORDS): is_blk = True; reasons.append(obj.strip())
+                        elif "online" in vl or vl.isdigit(): is_on = True
+
+                scan_obj(raw_st)
+                scan_obj(d, ignore_keys=("title", "name", "uuid", "appid", "ips", "country", "rate", "bw", "total_bw", "redeem_bw", "earned", "earned_total", "uptime", "total_uptime", "online_time", "total_online_time"))
+
+                if is_blk:
+                    creasons = []
+                    for r in reasons:
+                        if r not in creasons: creasons.append(r)
+                    rtxt = " | ".join(creasons) if creasons else "IP Blocked"
+                    if d_ip and d_ip not in rtxt: rtxt = f"{rtxt} ({d_ip})"
+                    st, err = "blocked", rtxt
+                    nm = d.get('title', d.get('name', ''))
+                    if nm: threading.Thread(target=trigger_gost_failover, args=(nm, d_ip), daemon=True).start()
+                elif is_on: st, err = "online", ""
+                else: st, err = "offline", ""
+
                 r_ips = d.get('ips', d.get('ip', []))
                 c_ips = [str(ip).strip() for ip in r_ips if str(ip).strip()] if isinstance(r_ips, list) else [ip.strip().strip("'\"") for ip in str(r_ips).split(',') if ip.strip()]
                 if d_ip and d_ip not in c_ips: c_ips.append(f"{d_ip} (Detected)")
@@ -279,67 +230,55 @@ def api_stats():
 
     return jsonify(dash)
 
-@app.route('/api/gost')
+# ==================== FORWARDER KE API GOST ====================
+@app.route('/api/gost/full', methods=['GET'])
 @login_required
-def api_gost():
-    """Mengambil data proxy langsung dari file JSON GOST secara aman"""
+def api_gost_full():
     try:
         def load_j(f):
             try:
                 with open(os.path.join(GOST_DIR, f), "r") as fp: return json.load(fp)
             except: return {}
-        
         sts = {}
         try:
             with open(os.path.join(GOST_DIR, "settings.conf"), "r") as f:
                 for l in f:
-                    if "=" in l: 
-                        k, v = l.strip().split("=", 1)
-                        sts[k] = v
+                    if "=" in l: k, v = l.strip().split("=", 1); sts[k] = v
         except: pass
 
-        ipc = load_j("ip_cache.json")
-        lst = load_j("live_status.json")
-        prf = load_j("proxy_performance.json")
-        
+        ipc, lst, prf = load_j("ip_cache.json"), load_j("live_status.json"), load_j("proxy_performance.json")
         bnd = {}
         for z in sts.get("ZONES", "1081-1090").split(","):
             try:
                 with open(os.path.join(GOST_DIR, f"binds_{z.strip()}.txt"), "r") as f:
                     for l in f:
-                        if "|" in l: 
-                            p, prx = l.strip().split("|", 1)
-                            bnd[p] = prx
+                        if "|" in l: p, prx = l.strip().split("|", 1); bnd[p] = prx
             except: pass
 
         plist = []
         for p, prx in bnd.items():
             ip = ipc.get(prx, "-") if isinstance(ipc, dict) else "-"
-            
-            loc = "-"
-            if isinstance(prf, dict) and ip in prf and isinstance(prf[ip], dict):
-                loc = prf[ip].get("location", "-")
-                
-            st = "Offline"
-            if isinstance(lst, dict):
-                st = lst.get(prx, "Offline")
-                
-            plist.append({
-                "port": str(p),
-                "proxy": str(prx),
-                "ip": str(ip),
-                "location": str(loc),
-                "status": str(st)
-            })
+            loc = prf.get(ip, {}).get("location", "-") if isinstance(prf, dict) and isinstance(prf.get(ip), dict) else "-"
+            st = lst.get(prx, "Offline") if isinstance(lst, dict) else "Offline"
+            plist.append({"port": str(p), "proxy": str(prx), "ip": str(ip), "location": str(loc), "status": str(st)})
+        
+        return jsonify({"success": True, "settings": sts, "proxies": sorted(plist, key=lambda x: int(x["port"]) if x["port"].isdigit() else 999)})
+    except Exception as e: return jsonify({"success": False, "message": str(e)}), 500
 
-        def get_port_num(x):
-            try: return int(x["port"])
-            except: return 999999
-
-        sorted_plist = sorted(plist, key=get_port_num)
-        return jsonify({"success": True, "settings": sts, "proxies": sorted_plist})
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Server Error: {str(e)}"}), 500
+@app.route('/api/gost/proxy_action', methods=['POST'])
+@login_required
+def api_gost_proxy_action():
+    try:
+        req = request.get_json()
+        act = req.get("action")
+        if act == "get_pool": return jsonify(requests.get(f"{GOST_API_URL}/api/pool", params={"zone": req.get("zone")}, timeout=5).json())
+        elif act == "add_pool": return jsonify(requests.post(f"{GOST_API_URL}/api/pool/add", json=req, timeout=5).json())
+        elif act == "del_pool": return jsonify(requests.post(f"{GOST_API_URL}/api/pool/del", json=req, timeout=5).json())
+        elif act == "bind": return jsonify(requests.post(f"{GOST_API_URL}/api/bind", json=req, timeout=5).json())
+        elif act == "settings": return jsonify(requests.post(f"{GOST_API_URL}/api/settings", json=req, timeout=5).json())
+        elif act == "top": return jsonify(requests.get(f"{GOST_API_URL}/api/top", timeout=5).json())
+    except Exception as e: return jsonify({"success": False, "message": str(e)})
+    return jsonify({"success": False})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
