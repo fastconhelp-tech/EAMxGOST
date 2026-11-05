@@ -5,6 +5,7 @@ import re
 import datetime
 import urllib.parse
 from functools import wraps
+import threading
 
 app = Flask(__name__)
 app.secret_key = "rahasia_earnapp_super_aman_123"
@@ -12,6 +13,7 @@ ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin"
 
 DB_FILE = "/root/earnapp-web/earnapp.db"
+GOST_API_URL = "http://127.0.0.1:5001/api/failover" # Kabel penghubung ke GOST TUI
 
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
@@ -46,6 +48,31 @@ def get_headers(cookie):
     }
 
 # ==========================================
+# AUTO-FAILOVER TRIGGER
+# ==========================================
+def trigger_gost_failover(node_name, detected_ip):
+    """Fungsi penembak jitu: Mengirim sinyal ke GOST API jika node terblokir"""
+    try:
+        # Ekstrak nomor port dari nama node (misal W4 -> port 1084, W10 -> port 1090)
+        # Asumsi pola nama: W + urutan (W1=1081, W2=1082... W10=1090)
+        match = re.search(r'W(\d+)', str(node_name), re.IGNORECASE)
+        if match:
+            idx = int(match.group(1))
+            target_port = 1080 + idx # Kalkulasi port dasar 1080 + urutan
+            
+            payload = {"port": target_port}
+            res = requests.post(GOST_API_URL, json=payload, timeout=5)
+            
+            if res.status_code == 200:
+                print(f"[AUTO-HEAL] Node {node_name} (Port {target_port}) Blocked. GOST Failover dipicu! Status: {res.json().get('message', 'OK')}")
+            else:
+                print(f"[AUTO-HEAL] Gagal memicu GOST untuk Node {node_name}. HTTP {res.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"[AUTO-HEAL] GOST API tidak merespon: {e}. Pastikan GOST TUI berjalan.")
+    except Exception as e:
+        print(f"[AUTO-HEAL] Error saat memicu failover: {e}")
+
+# ==========================================
 # PEMINDAI MENDALAM STATUS NODE (DEEP SCANNER)
 # ==========================================
 BLOCK_KEYWORDS = [
@@ -78,22 +105,18 @@ def analyze_device_status(dev_dict, raw_st):
                 if k_low in ignore_keys or v is None:
                     continue
 
-                # Tangkap IP yang terdeteksi saat ini dari device_statuses
                 if k_low in ("ip", "detected_ip", "current_ip", "remote_ip") and isinstance(v, str) and v.strip():
                     detected_ip = v.strip()
 
-                # Cek flag boolean blokir/VPN
                 if k_low in BOOL_BLOCK_KEYS:
                     if v is True or str(v).lower() in ("true", "1", "yes"):
                         is_blocked = True
                         reasons.append(k_low.replace("_", " ").title())
                     continue
 
-                # Cek flag boolean online
                 if k_low in ("online", "is_online") and (v is True or str(v).lower() == "true"):
                     is_online = True
 
-                # Cek field bertipe error/reason
                 if k_low in ERROR_KEYS:
                     if isinstance(v, str) and v.strip() and v.strip().lower() not in ("none", "null", "false", "0", "ok"):
                         is_blocked = True
@@ -102,7 +125,6 @@ def analyze_device_status(dev_dict, raw_st):
                         scan_obj(v)
                     continue
 
-                # Cek string umum terhadap kata kunci blokir/online
                 if isinstance(v, str):
                     v_low = v.strip().lower()
                     if any(kw in v_low for kw in BLOCK_KEYWORDS):
@@ -127,10 +149,7 @@ def analyze_device_status(dev_dict, raw_st):
             if obj > 0:
                 is_online = True
 
-    # 1. Pindai respons real-time dari device_statuses
     scan_obj(raw_st)
-
-    # 2. Pindai atribut perangkat dari /devices (abaikan nama/judul agar tidak salah deteksi)
     scan_obj(dev_dict, ignore_keys=(
         "title", "name", "uuid", "appid", "ips", "country", "rate",
         "bw", "total_bw", "redeem_bw", "earned", "earned_total",
@@ -140,11 +159,16 @@ def analyze_device_status(dev_dict, raw_st):
     if is_blocked:
         clean_reasons = []
         for r in reasons:
-            if r not in clean_reasons:
-                clean_reasons.append(r)
+            if r not in clean_reasons: clean_reasons.append(r)
         reason_text = " | ".join(clean_reasons) if clean_reasons else "IP Blocked / VPN"
         if detected_ip and detected_ip not in reason_text:
             reason_text = f"{reason_text} ({detected_ip})"
+        
+        # JIKA NODE BLOCKED, TEMBAK GOST SECARA ASYNCHRONOUS AGAR DASHBOARD TIDAK LAG
+        node_title = dev_dict.get('title', dev_dict.get('name', ''))
+        if node_title:
+            threading.Thread(target=trigger_gost_failover, args=(node_title, detected_ip), daemon=True).start()
+            
         return "blocked", reason_text, detected_ip
     elif is_online:
         return "online", "", detected_ip
@@ -239,9 +263,7 @@ def delete_account(acc_id):
 @app.route('/api/raw_check')
 @login_required
 def api_raw_check():
-    """Endpoint diagnostik untuk memeriksa JSON mentah dari EarnApp API"""
-    with sqlite3.connect(DB_FILE) as conn:
-        accounts = conn.execute('SELECT id, name, cookie FROM accounts').fetchall()
+    with sqlite3.connect(DB_FILE) as conn: accounts = conn.execute('SELECT id, name, cookie FROM accounts').fetchall()
     out = {}
     for acc_id, name, cookie in accounts:
         headers = get_headers(cookie)
@@ -250,8 +272,7 @@ def api_raw_check():
             payload_uuids = {"devices": [{"uuid": d['uuid'], "appid": d.get('appid', 'node_earnapp.com')} for d in res_devs if isinstance(d, dict) and 'uuid' in d]}
             res_st = requests.post("https://earnapp.com/dashboard/api/device_statuses?appid=earnapp", headers=headers, json=payload_uuids, timeout=12).json()
             out[name] = {"devices_sample": res_devs[:5] if isinstance(res_devs, list) else res_devs, "device_statuses": res_st}
-        except Exception as e:
-            out[name] = {"error": str(e)}
+        except Exception as e: out[name] = {"error": str(e)}
     return jsonify(out)
 
 @app.route('/api/withdraw', methods=['POST'])
@@ -269,12 +290,12 @@ def api_withdraw():
     try:
         res_money = requests.get("https://earnapp.com/dashboard/api/money?appid=earnapp", headers=headers, timeout=12).json()
         balance = float(res_money.get('balance', 0) or 0)
-        if balance < 2.5: return jsonify({"success": False, "message": f"Saldo akun {acc_name} saat ini \${balance:.2f} (Minimal \$2.50)."}), 400
+        if balance < 2.5: return jsonify({"success": False, "message": f"Saldo akun {acc_name} saat ini ${balance:.2f} (Minimal $2.50)."}), 400
         
         payload = {"to": email, "payment_method": payment_method}
         res_wd = requests.post("https://earnapp.com/dashboard/api/redeem?appid=earnapp", headers=headers, json=payload, timeout=15)
         
-        if res_wd.status_code == 200: return jsonify({"success": True, "message": f"Berhasil! Penarikan \${balance:.2f} sedang diproses ke {email}."})
+        if res_wd.status_code == 200: return jsonify({"success": True, "message": f"Berhasil! Penarikan ${balance:.2f} sedang diproses ke {email}."})
         else: return jsonify({"success": False, "message": "Penarikan ditolak oleh server EarnApp."}), 400
     except Exception as e: return jsonify({"success": False, "message": f"Kesalahan jaringan: {str(e)}"}), 500
 
@@ -322,8 +343,7 @@ def api_stats():
                             status_map = res_status["statuses"]
                         elif "devices" in res_status and isinstance(res_status["devices"], dict):
                             status_map = res_status["devices"]
-                        else:
-                            status_map = res_status
+                        else: status_map = res_status
                     elif isinstance(res_status, list):
                         for item in res_status:
                             if isinstance(item, dict) and "uuid" in item:
