@@ -40,7 +40,7 @@ def get_headers(cookie):
     csrf_match = re.search(r'xsrf-token=([^;]+)', cookie)
     csrf_token = urllib.parse.unquote(csrf_match.group(1)) if csrf_match else ""
     return {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0",
         "Accept": "application/json, text/javascript, */*; q=0.01",
         "Content-Type": "application/json",
         "X-Requested-With": "XMLHttpRequest",
@@ -61,7 +61,7 @@ def trigger_gost_failover(node_name, detected_ip):
             if res.status_code == 200:
                 print(f"[AUTO-HEAL] Node {node_name} Blocked. GOST Failover dipicu!")
     except Exception as e:
-        print(f"[AUTO-HEAL] Error: {e}")
+        print(f"[AUTO-HEAL] Error API GOST: {e}")
 
 BLOCK_KEYWORDS = ["blocked", "ip_blocked", "banned", "vpn", "low quality", "low_quality", "not earning", "not_earning", "proxy", "datacenter", "hosting", "blacklisted", "abuse", "restricted", "suspended"]
 ERROR_KEYS = {"error", "error_reason", "err", "reason", "ban_reason", "block_reason", "message", "msg", "problem", "warning", "alert", "status_reason"}
@@ -198,7 +198,7 @@ def api_withdraw():
     headers = get_headers(row[1])
     try:
         bal = float(requests.get("https://earnapp.com/dashboard/api/money?appid=earnapp", headers=headers, timeout=12).json().get('balance', 0) or 0)
-        if bal < 2.5: return jsonify({"success": False, "message": f"Saldo minimal $2.50."}), 400
+        if bal < 2.5: return jsonify({"success": False, "message": f"Saldo minimal \$2.50."}), 400
         res = requests.post("https://earnapp.com/dashboard/api/redeem?appid=earnapp", headers=headers, json={"to": email, "payment_method": method}, timeout=15)
         return jsonify({"success": res.status_code == 200, "message": "Berhasil dicairkan." if res.status_code==200 else "Ditolak EarnApp."})
     except Exception as e: return jsonify({"success": False, "message": str(e)}), 500
@@ -282,43 +282,64 @@ def api_stats():
 @app.route('/api/gost')
 @login_required
 def api_gost():
-    """Mengambil data proxy langsung dari file JSON GOST"""
-    def load_j(f):
-        try:
-            with open(os.path.join(GOST_DIR, f), "r") as fp: return json.load(fp)
-        except: return {}
-    
-    sts = {}
+    """Mengambil data proxy langsung dari file JSON GOST secara aman"""
     try:
-        with open(os.path.join(GOST_DIR, "settings.conf"), "r") as f:
-            for l in f:
-                if "=" in l: k, v = l.strip().split("=", 1); sts[k] = v
-    except: pass
-
-    ipc = load_j("ip_cache.json")
-    lst = load_j("live_status.json")
-    prf = load_j("proxy_performance.json")
-    
-    bnd = {}
-    for z in sts.get("ZONES", "1081-1090").split(","):
+        def load_j(f):
+            try:
+                with open(os.path.join(GOST_DIR, f), "r") as fp: return json.load(fp)
+            except: return {}
+        
+        sts = {}
         try:
-            with open(os.path.join(GOST_DIR, f"binds_{z.strip()}.txt"), "r") as f:
+            with open(os.path.join(GOST_DIR, "settings.conf"), "r") as f:
                 for l in f:
-                    if "|" in l: p, prx = l.strip().split("|", 1); bnd[p] = prx
+                    if "=" in l: 
+                        k, v = l.strip().split("=", 1)
+                        sts[k] = v
         except: pass
 
-    plist = []
-    for p, prx in bnd.items():
-        ip = ipc.get(prx, "-")
-        plist.append({
-            "port": p,
-            "proxy": prx,
-            "ip": ip,
-            "location": prf.get(ip, {}).get("location", "-") if ip in prf else "-",
-            "status": lst.get(prx, "Offline")
-        })
+        ipc = load_j("ip_cache.json")
+        lst = load_j("live_status.json")
+        prf = load_j("proxy_performance.json")
+        
+        bnd = {}
+        for z in sts.get("ZONES", "1081-1090").split(","):
+            try:
+                with open(os.path.join(GOST_DIR, f"binds_{z.strip()}.txt"), "r") as f:
+                    for l in f:
+                        if "|" in l: 
+                            p, prx = l.strip().split("|", 1)
+                            bnd[p] = prx
+            except: pass
 
-    return jsonify({"settings": sts, "proxies": sorted(plist, key=lambda x: int(x["port"]))})
+        plist = []
+        for p, prx in bnd.items():
+            ip = ipc.get(prx, "-") if isinstance(ipc, dict) else "-"
+            
+            loc = "-"
+            if isinstance(prf, dict) and ip in prf and isinstance(prf[ip], dict):
+                loc = prf[ip].get("location", "-")
+                
+            st = "Offline"
+            if isinstance(lst, dict):
+                st = lst.get(prx, "Offline")
+                
+            plist.append({
+                "port": str(p),
+                "proxy": str(prx),
+                "ip": str(ip),
+                "location": str(loc),
+                "status": str(st)
+            })
+
+        def get_port_num(x):
+            try: return int(x["port"])
+            except: return 999999
+
+        sorted_plist = sorted(plist, key=get_port_num)
+        return jsonify({"success": True, "settings": sts, "proxies": sorted_plist})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Server Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
