@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# ==========================================
-# KONFIGURASI WARNA & VARIABEL
-# ==========================================
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -14,12 +11,8 @@ APP_DIR="/root/earnapp-web"
 SERVICE_NAME="earnapp-web"
 PORT="5000"
 
-# ==========================================
-# FUNGSI PEMBANTU
-# ==========================================
 clear_screen() { clear; }
 
-# Mengambil IP Lokal (LAN) langsung dari sistem
 get_ip() { 
     hostname -I | awk '{print $1}'
 }
@@ -32,15 +25,19 @@ check_installation() {
     [ -f "$APP_DIR/app.py" ] && echo -e "${GREEN}✅ Terinstal${NC}" || echo -e "${RED}❌ Belum Terinstal${NC}"
 }
 
-# ==========================================
-# FUNGSI INSTALASI
-# ==========================================
 install_dashboard() {
     clear_screen
     echo -e "${CYAN}======================================================${NC}"
-    echo -e "${BOLD}🚀 PROSES INSTALASI EARNAPP WEB DASHBOARD${NC}"
+    echo -e "${BOLD}🚀 PROSES INSTALASI / UPDATE EARNAPP WEB DASHBOARD${NC}"
     echo -e "${CYAN}======================================================${NC}"
     
+    OLD_USER=""
+    OLD_PASS=""
+    if [ -f "$APP_DIR/app.py" ]; then
+        OLD_USER=$(grep "^ADMIN_USERNAME =" "$APP_DIR/app.py" | cut -d'"' -f2)
+        OLD_PASS=$(grep "^ADMIN_PASSWORD =" "$APP_DIR/app.py" | cut -d'"' -f2)
+    fi
+
     echo -e "\n${YELLOW}⏳ [1/4] Mempersiapkan direktori dan dependensi sistem...${NC}"
     mkdir -p "$APP_DIR/templates" "$APP_DIR/static"
     cd "$APP_DIR" || exit
@@ -48,17 +45,26 @@ install_dashboard() {
     apt-get update -y > /dev/null 2>&1
     apt-get install -y python3 python3-venv sqlite3 wget > /dev/null 2>&1
 
-    echo -e "${YELLOW}⏳ [2/4] Membangun lingkungan Python (venv) & library...${NC}"
+    echo -e "${YELLOW}⏳ [2/4] Memastikan lingkungan Python (venv) & library...${NC}"
     if [ ! -d "venv" ]; then
         python3 -m venv venv
     fi
-    ./venv/bin/pip install flask requests gunicorn > /dev/null 2>&1
+    ./venv/bin/pip install --upgrade flask requests gunicorn > /dev/null 2>&1
 
-    echo -e "${YELLOW}⏳ [3/4] Mengunduh skrip dari GitHub...${NC}"
-    wget -qO app.py "https://raw.githubusercontent.com/fastconhelp-tech/EarnAppMultiMonitor/main/app.py"
-    wget -qO templates/index.html "https://raw.githubusercontent.com/fastconhelp-tech/EarnAppMultiMonitor/main/index.html"
+    echo -e "${YELLOW}⏳ [3/4] Mengunduh skrip terbaru dari GitHub EAMxGOST...${NC}"
+    TS=$(date +%s)
+    # ⚠️ INI ADALAH KOMPAS YANG BARU MENUNJUK KE EAMxGOST ⚠️
+    wget --no-cache -qO app.py "https://raw.githubusercontent.com/fastconhelp-tech/EAMxGOST/main/app.py?v=$TS"
+    wget --no-cache -qO templates/index.html "https://raw.githubusercontent.com/fastconhelp-tech/EAMxGOST/main/index.html?v=$TS"
 
-    echo -e "${YELLOW}⏳ [4/4] Mengonfigurasi Service SystemD...${NC}"
+    if [[ -n "$OLD_USER" ]]; then
+        sed -i "s/^ADMIN_USERNAME = .*/ADMIN_USERNAME = \"$OLD_USER\"/" "$APP_DIR/app.py"
+    fi
+    if [[ -n "$OLD_PASS" ]]; then
+        sed -i "s/^ADMIN_PASSWORD = .*/ADMIN_PASSWORD = \"$OLD_PASS\"/" "$APP_DIR/app.py"
+    fi
+
+    echo -e "${YELLOW}⏳ [4/4] Mengonfigurasi & Merestart Service SystemD...${NC}"
     cat << EOF > /etc/systemd/system/$SERVICE_NAME.service
 [Unit]
 Description=EarnApp Web Dashboard
@@ -77,16 +83,13 @@ EOF
 
     systemctl daemon-reload
     systemctl enable $SERVICE_NAME > /dev/null 2>&1
-    systemctl start $SERVICE_NAME
+    systemctl restart $SERVICE_NAME
     
-    echo -e "\n${GREEN}✅ INSTALASI SELESAI!${NC}"
+    echo -e "\n${GREEN}✅ INSTALASI & SINKRONISASI SELESAI!${NC}"
     echo -e "🌐 Akses Web Dashboard di: ${BOLD}http://$(get_ip):$PORT${NC}"
     read -p "Tekan Enter untuk kembali ke Menu Utama..."
 }
 
-# ==========================================
-# FUNGSI MANAJEMEN
-# ==========================================
 change_port() {
     clear_screen
     echo -e "${CYAN}======================================================${NC}"
@@ -114,21 +117,23 @@ change_credentials() {
     echo -e "${CYAN}======================================================${NC}"
     
     if [ ! -f "$APP_DIR/app.py" ]; then
-        echo -e "\n${RED}❌ Error: Dasbor belum terinstal. Silakan jalankan opsi 1 terlebih dahulu.${NC}"
+        echo -e "\n${RED}❌ Error: Dasbor belum terinstal.${NC}"
         read -p "Tekan Enter..."
         return
     fi
     
+    CUR_USER=$(grep "^ADMIN_USERNAME =" "$APP_DIR/app.py" | cut -d'"' -f2)
+    echo -e "Username saat ini: ${YELLOW}${CUR_USER:-admin}${NC}"
     echo -e "Kosongkan dan tekan Enter jika tidak ingin mengubah salah satunya.\n"
     read -p "Masukkan Username Baru: " NEW_USER
     read -p "Masukkan Password Baru: " NEW_PASS
     
     if [[ -n "$NEW_USER" ]]; then
-        sed -i "s/^ADMIN_USERNAME = .*/ADMIN_USERNAME = \"$NEW_USER\"/" $APP_DIR/app.py
+        sed -i "s/^ADMIN_USERNAME = .*/ADMIN_USERNAME = \"$NEW_USER\"/" "$APP_DIR/app.py"
     fi
     
     if [[ -n "$NEW_PASS" ]]; then
-        sed -i "s/^ADMIN_PASSWORD = .*/ADMIN_PASSWORD = \"$NEW_PASS\"/" $APP_DIR/app.py
+        sed -i "s/^ADMIN_PASSWORD = .*/ADMIN_PASSWORD = \"$NEW_PASS\"/" "$APP_DIR/app.py"
     fi
 
     if [[ -n "$NEW_USER" || -n "$NEW_PASS" ]]; then
@@ -143,9 +148,9 @@ change_credentials() {
 uninstall_dashboard() {
     clear_screen
     echo -e "${CYAN}======================================================${NC}"
-    echo -e "${BOLD}🗑️ UNINSTALL DASHBOARD (PENGHAPUSAN TOTAL)${NC}"
+    echo -e "${BOLD}🗑️ UNINSTALL DASHBOARD${NC}"
     echo -e "${CYAN}======================================================${NC}"
-    echo -e "${RED}⚠️ PERINGATAN: Ini akan menghapus seluruh data, termasuk database SQLite!${NC}\n"
+    echo -e "${RED}⚠️ PERINGATAN: Ini akan menghapus seluruh data!${NC}\n"
     read -p "Ketik 'YAKIN' (huruf besar) untuk melanjutkan: " CONFIRM
     
     if [ "$CONFIRM" == "YAKIN" ]; then
@@ -164,20 +169,17 @@ uninstall_dashboard() {
     read -p "Tekan Enter..."
 }
 
-# ==========================================
-# MENU UTAMA (LOOP)
-# ==========================================
 while true; do
     clear_screen
     echo -e "${CYAN}======================================================${NC}"
-    echo -e "${BOLD}    🌐 EARNAPP WEB DASHBOARD MANAGER 🌐${NC}"
+    echo -e "${BOLD}    🌐 EAM x GOST MANAGER 🌐${NC}"
     echo -e "${CYAN}======================================================${NC}"
     echo -e " 🖥️  IP Lokal      : ${YELLOW}$(get_ip)${NC}"
     echo -e " 🔌 Port Akses    : ${YELLOW}$PORT${NC}"
     echo -e " 📦 Status Install: $(check_installation)"
     echo -e " 🐝 Status Service: $(check_service_status)"
     echo -e "${CYAN}======================================================${NC}"
-    echo -e " 1. 📥 Install / Reinstall Web Dashboard"
+    echo -e " 1. 📥 Install / Update Web Dashboard (EAMxGOST)"
     echo -e " 2. 🚀 Start Service"
     echo -e " 3. 🛑 Stop Service"
     echo -e " 4. 🔄 Restart Service"
