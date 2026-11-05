@@ -41,7 +41,6 @@
                     
                     <button class="btn btn-outline-light btn-sm px-3" style="height: 38px; border-radius: 8px;" type="button" data-bs-toggle="collapse" data-bs-target="#accountManager" data-i18n="mAcc">⚙️ Kelola Akun ({{ accounts|length }})</button>
                     
-                    <!-- KEMBALI MUNCULKAN PILIHAN BAHASA -->
                     <div class="bg-dark px-2" style="height: 38px; border-radius: 8px; border: 1px solid #313244; display: inline-flex; align-items: center;">
                         <span class="text-secondary me-1">🌐</span>
                         <select id="langSelector" class="form-select form-select-sm border-0" style="width: auto; background: transparent; color: #cdd6f4; box-shadow: none;" onchange="changeLanguage()">
@@ -109,20 +108,22 @@
 
         <div class="tab-content" id="pills-tabContent">
             
-            <!-- EARNAPP TAB -->
             <div class="tab-pane fade show active" id="pills-earnapp" role="tabpanel" tabindex="0">
                 <div id="dashboardContent" class="row g-4">
                     <div class="col-12 text-center py-5"><div class="spinner-border text-info mb-2"></div><p class="text-secondary" data-i18n="loadE">⏳ Sedang memanen data dari semua akun EarnApp...</p></div>
                 </div>
             </div>
 
-            <!-- GOST PROXY TAB (NEW SUPER POWER) -->
+            <!-- GOST PROXY TAB (SUPER POWER) -->
             <div class="tab-pane fade" id="pills-gost" role="tabpanel" tabindex="0">
                 <div class="card p-3 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
                         <div class="d-flex align-items-center gap-3">
                             <h5 class="mb-0 fw-bold text-info" data-i18n="gstS">🛡️ GOST Control Center</h5>
-                            <select id="gostZoneSelect" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: auto;" onchange="fetchGostStats()"></select>
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <select id="gostZoneSelect" class="form-select bg-dark text-light border-secondary" style="width: 130px;" onchange="fetchGostStats()"></select>
+                                <button class="btn btn-outline-info" onclick="showZoneManagerModal()" title="Manajemen Zona">⚙️</button>
+                            </div>
                         </div>
                         <div class="d-flex gap-2 align-items-center">
                             <div class="input-group input-group-sm" style="width: 200px;">
@@ -153,6 +154,29 @@
                 </div>
             </div>
             
+        </div>
+    </div>
+
+    <!-- MODAL MANAJEMEN ZONA -->
+    <div class="modal fade" id="gostZoneModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background-color: #1e1e2e; border: 1px solid #45475a; border-radius: 14px;">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title fw-bold text-light">⚙️ Manajemen Zona Port</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-secondary mb-2">Daftar Zona Aktif (Pisahkan dengan koma):</p>
+                    <textarea id="zoneEditorInput" class="form-control bg-dark text-light border-secondary mb-3" rows="3" placeholder="Misal: 1081-1090, 60000-60010"></textarea>
+                    <div class="alert alert-info py-2 small mb-0">
+                        Format harus berpasangan <b>START-END</b>. Contoh: <code>1081-1090</code>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-sm btn-success px-4" onclick="saveZones()">💾 Simpan Zona</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -221,6 +245,7 @@
         let refreshTimer = null;
         let poolModalInst = null;
         let topModalInst = null;
+        let zoneModalInst = null;
         let currentGostZone = "";
         let gostSettings = {};
         window.appData = [];
@@ -233,6 +258,7 @@
             
             poolModalInst = new bootstrap.Modal(document.getElementById('gostPoolModal'));
             topModalInst = new bootstrap.Modal(document.getElementById('gostTopModal'));
+            zoneModalInst = new bootstrap.Modal(document.getElementById('gostZoneModal'));
             
             startRefreshTimer();
             fetchAllData();
@@ -280,13 +306,16 @@
             try {
                 const res = await fetch('/api/gost/full');
                 const data = await res.json();
-                if (!res.ok || !data.success) throw new Error("Gagal mengambil data sistem GOST.");
+                if (!res.ok || !data.success) throw new Error(data.message || "Endpoint API GOST belum siap.");
                 
                 gostSettings = data.settings || {};
                 
                 const zs = document.getElementById('gostZoneSelect');
-                if (zs.options.length === 0) {
-                    const zones = (gostSettings.ZONES || "1081-1090").split(",");
+                const zones = (gostSettings.ZONES || "1081-1090").split(",").map(x => x.trim()).filter(x => x);
+                
+                // Regenerate dropdown if changed
+                if (zs.options.length !== zones.length || !zones.includes(zs.value)) {
+                    zs.innerHTML = '';
                     zones.forEach(z => zs.add(new Option(`Zone ${z}`, z)));
                     currentGostZone = zones[0];
                 } else {
@@ -316,7 +345,7 @@
                         if (st.includes('Online')) badge = '<span class="badge badge-online">🟢 ONLINE</span>';
                         else if (st.includes('Failover')) badge = '<span class="badge badge-blocked">🔄 FAILOVER</span>';
                         else if (st.includes('Checking') || st.includes('Memeriksa')) badge = '<span class="badge bg-secondary">⏳ CHECKING</span>';
-                        else if (st.includes('Free')) badge = '<span class="badge bg-dark border-secondary text-secondary">⚪ FREE</span>';
+                        else if (st.includes('Free')) badge = '<span class="badge bg-dark border-secondary text-secondary">⚪ FREE (KOSONG)</span>';
                         
                         let s_px = p.proxy || "";
                         if(s_px.length > 40) s_px = s_px.substring(0, 40) + '...';
@@ -338,6 +367,24 @@
             } catch (e) {
                 document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger"><b>Error GOST:</b> ${e.message}</td></tr>`;
             }
+        }
+
+        function showZoneManagerModal() {
+            document.getElementById('zoneEditorInput').value = gostSettings.ZONES || "1081-1090";
+            zoneModalInst.show();
+        }
+
+        async function saveZones() {
+            const rawZones = document.getElementById('zoneEditorInput').value;
+            const newZones = rawZones.split(',').map(x => x.trim()).filter(x => x && x.includes('-')).join(',');
+            if (newZones) {
+                const res = await reqGost("update_zones", {zones: newZones});
+                if (res.success) {
+                    zoneModalInst.hide();
+                    document.getElementById('gostZoneSelect').innerHTML = ''; // Force dropdown rebuild
+                    fetchGostStats();
+                } else alert("Gagal menyimpan zona.");
+            } else alert("Format zona salah.");
         }
 
         async function updateGostSetting(key, val) {
