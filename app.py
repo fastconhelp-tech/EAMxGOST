@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, render_template_string
-import sqlite3, requests, re, datetime, urllib.parse, os, json, threading, time
+import sqlite3, requests, re, datetime, urllib.parse, os, json, threading, time, concurrent.futures
 from functools import wraps
 
 app = Flask(__name__)
@@ -24,7 +24,14 @@ def format_waktu(raw_val):
         return f"{m}m"
     except: return "0m"
 
-# INI FUNGSI YANG HILANG DAN MEMBUAT ERROR
+def format_waktu_detik(seconds):
+    try:
+        s = int(seconds); d = s // 86400; h = (s % 86400) // 3600; m = (s % 3600) // 60
+        if d > 0: return f"{d}d {h}h"
+        if h > 0: return f"{h}h {m}m"
+        return f"{m}m"
+    except: return "-"
+
 def natural_key(text): return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(text))]
 
 def get_headers(cookie):
@@ -91,7 +98,7 @@ def api_stats():
     
     curr = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    for acc in accounts:
+    def fetch_account(acc):
         acc_id, acc_name, acc_cookie = acc
         try:
             head = get_headers(acc_cookie)
@@ -99,20 +106,17 @@ def api_stats():
             try:
                 rm_req = requests.get("https://earnapp.com/dashboard/api/money?appid=earnapp", headers=head, timeout=6)
                 if rm_req.status_code != 200:
-                    dash["accounts"].append({"id": acc_id, "name": acc_name, "error": f"HTTP {rm_req.status_code}: Cookie kedaluwarsa atau IP diblokir Cloudflare."})
-                    continue
+                    return {"success": False, "data": {"id": acc_id, "name": acc_name, "error": f"HTTP {rm_req.status_code}: Cookie kedaluwarsa atau IP diblokir Cloudflare."}}
                 rm = rm_req.json()
             except Exception as e:
-                dash["accounts"].append({"id": acc_id, "name": acc_name, "error": f"Koneksi Timeout (Sistem EarnApp lambat)."})
-                continue
+                return {"success": False, "data": {"id": acc_id, "name": acc_name, "error": f"Koneksi Timeout (Sistem EarnApp lambat). {str(e)}"}}
                 
             bal = float(rm.get('balance', 0) or 0)
             life = float(rm.get('earnings_total', rm.get('total_earnings', 0)) or 0)
-            dash["total_balance"] += bal
-            dash["total_lifetime"] += life
             
             try:
-                with sqlite3.connect(DB_FILE, timeout=3) as c_hist: c_hist.execute('INSERT OR REPLACE INTO history (account_id, date, balance, lifetime) VALUES (?, ?, ?, ?)', (acc_id, curr, bal, life))
+                with sqlite3.connect(DB_FILE, timeout=3) as c_hist: 
+                    c_hist.execute('INSERT OR REPLACE INTO history (account_id, date, balance, lifetime) VALUES (?, ?, ?, ?)', (acc_id, curr, bal, life))
             except: pass
                 
             try:
@@ -148,39 +152,114 @@ def api_stats():
             ac = sum(1 for x in dev_info if x['status'] == 'online')
             bc = sum(1 for x in dev_info if x['status'] == 'blocked')
             
-            dash["total_online"] += ac
-            dash["total_nodes"] += len(dev_info)
-            dash["accounts"].append({"id": acc_id, "name": acc_name, "balance": bal, "lifetime": life, "total_usage": format_waktu(up_ms), "devices": dev_info, "active_nodes": ac, "blocked_nodes": bc, "total_nodes": len(dev_info)})
+            return {"success": True, "data": {"id": acc_id, "name": acc_name, "balance": bal, "lifetime": life, "total_usage": format_waktu(up_ms), "devices": dev_info, "active_nodes": ac, "blocked_nodes": bc, "total_nodes": len(dev_info)}}
             
         except Exception as e: 
-            dash["accounts"].append({"id": acc_id, "name": acc_name, "error": f"Kesalahan Sistem: {str(e)}"})
+            return {"success": False, "data": {"id": acc_id, "name": acc_name, "error": f"Kesalahan Sistem: {str(e)}"}}
+
+    # MULTITHREADING AGAR LOADING EARNAPP KILAT
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        results = list(executor.map(fetch_account, accounts))
+    
+    for res in results:
+        dash["accounts"].append(res["data"])
+        if res["success"]:
+            dash["total_balance"] += res["data"].get("balance", 0)
+            dash["total_lifetime"] += res["data"].get("lifetime", 0)
+            dash["total_online"] += res["data"].get("active_nodes", 0)
+            dash["total_nodes"] += res["data"].get("total_nodes", 0)
 
     return jsonify(dash)
 
+# INI ADALAH FUNGSI YANG HILANG SEBELUMNYA - MEMBACA DATA PROXY GOST
 @app.route('/api/gost/full', methods=['GET'])
 @login_required
-def api_gost_full(): return jsonify({"success": False, "message": "Gunakan GOST Manager lokal."})
+def api_gost_full():
+    try:
+        def load_j(f):
+            try:
+                with open(os.path.join(GOST_DIR, f), "r") as fp: return json.load(fp)
+            except: return {}
+        sts = {}
+        try:
+            with open(os.path.join(GOST_DIR, "settings.conf"), "r") as f:
+                for l in f:
+                    if "=" in l: k, v = l.strip().split("=", 1); sts[k] = v
+        except: pass
+
+        ipc, lst, p_st = load_j("ip_cache.json"), load_j("live_status.json"), load_j("proxy_state.json")
+        bnd = {}
+        all_zone_ports = []
+        zones_raw = sts.get("ZONES", "1081-1090").split(",")
+        for z in zones_raw:
+            z = z.strip()
+            if "-" in z:
+                try:
+                    s, e = map(int, z.split("-"))
+                    all_zone_ports.extend(range(s, e + 1))
+                except: pass
+            try:
+                with open(os.path.join(GOST_DIR, f"binds_{z}.txt"), "r") as f:
+                    for l in f:
+                        if "|" in l: p, prx = l.strip().split("|", 1); bnd[int(p)] = prx
+            except: pass
+
+        plist = []
+        for p in all_zone_ports:
+            if p in bnd:
+                prx = bnd[p]
+                ip = ipc.get(prx, "-") if isinstance(ipc, dict) else "-"
+                st = lst.get(prx, "Offline") if isinstance(lst, dict) else "Offline"
+                
+                s_data = p_st.get(str(p), {}) if isinstance(p_st, dict) else {}
+                asn = s_data.get("asn", "-")
+                u_sec = s_data.get("usage_time", 0)
+                usage_str = format_waktu_detik(u_sec) if u_sec > 0 else "-"
+                
+                b_time = s_data.get("bind_time", 0)
+                uptime_str = "-"
+                b_dt = "-"
+                exp_dt = "-"
+                if b_time > 0:
+                    dt_obj = datetime.datetime.fromtimestamp(b_time)
+                    b_dt = dt_obj.strftime("%Y-%m-%d %H:%M:%S")
+                    exp_dt = (dt_obj + datetime.timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+                    uptime_str = format_waktu_detik(time.time() - b_time)
+
+                plist.append({
+                    "port": str(p), "proxy": str(prx), "ip": str(ip), 
+                    "location": "-", "asn": str(asn), "status": str(st),
+                    "usage_time": usage_str, "bind_date": b_dt, "exp_date": exp_dt, "uptime": uptime_str
+                })
+            else:
+                plist.append({"port": str(p), "proxy": "", "ip": "-", "location": "-", "asn": "-", "status": "Free", "usage_time": "-", "bind_date": "-", "exp_date": "-", "uptime": "-"})
+        
+        return jsonify({"success": True, "settings": sts, "proxies": sorted(plist, key=lambda x: int(x["port"]))})
+    except Exception as e: return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/api/gost/proxy_action', methods=['POST'])
 @login_required
 def api_gost_proxy_action():
     try:
-        req = request.get_json(); act = req.get("action")
+        req = request.get_json()
+        act = req.get("action")
         if act == "get_pool": return jsonify(requests.get(f"{GOST_API_URL}/api/pool", params={"zone": req.get("zone")}, timeout=5).json())
         elif act == "add_pool": return jsonify(requests.post(f"{GOST_API_URL}/api/pool/add", json=req, timeout=5).json())
         elif act == "del_pool": return jsonify(requests.post(f"{GOST_API_URL}/api/pool/del", json=req, timeout=5).json())
         elif act == "bind": return jsonify(requests.post(f"{GOST_API_URL}/api/bind", json=req, timeout=5).json())
         elif act == "settings": return jsonify(requests.post(f"{GOST_API_URL}/api/settings", json=req, timeout=5).json())
         elif act == "update_zones":
+            new_zones = req.get("zones")
             with open(os.path.join(GOST_DIR, "settings.conf"), "r") as f: lines = f.readlines()
             with open(os.path.join(GOST_DIR, "settings.conf"), "w") as f:
                 found = False
                 for l in lines:
-                    if l.startswith("ZONES="): f.write(f"ZONES={req.get('zones')}\n"); found = True
+                    if l.startswith("ZONES="): f.write(f"ZONES={new_zones}\n"); found = True
                     else: f.write(l)
-                if not found: f.write(f"ZONES={req.get('zones')}\n")
+                if not found: f.write(f"ZONES={new_zones}\n")
             return jsonify({"success": True})
-    except: return jsonify({"success": False})
+    except Exception as e: return jsonify({"success": False, "message": str(e)})
+    return jsonify({"success": False})
 
 @app.route('/api/upload_excel', methods=['POST'])
 @login_required
