@@ -1,303 +1,345 @@
-<!DOCTYPE html>
-<html lang="id" data-bs-theme="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EarnApp Multi-Account Monitoring</title>
-    <link rel="icon" href="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" type="image/png">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { background-color: #181825; color: #cdd6f4; font-family: 'Segoe UI', system-ui, sans-serif; }
-        .card { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); }
-        .stat-pill { background-color: #313244; border-radius: 8px; height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
-        .chart-box { background-color: #181825; border: 1px solid #313244; border-radius: 12px; padding: 12px; height: 220px; position: relative; }
-        .table-container { max-height: 400px; overflow-y: auto; border-radius: 10px; border: 1px solid #313244; }
-        .table-dark { --bs-table-bg: #181825; --bs-table-striped-bg: #1e1e2e; margin-bottom: 0; }
-        .ip-chip { display: inline-block; margin: 2px 4px 2px 0; font-family: monospace; font-size: 0.85rem; }
-        .badge-online { background-color: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid #a6e3a1; }
-        .badge-offline { background-color: rgba(243, 139, 168, 0.15); color: #f38ba8; border: 1px solid #f38ba8; }
-        .badge-blocked { background-color: rgba(250, 179, 135, 0.18); color: #fab387; border: 1px solid #fab387; font-weight: bold; }
-        .btn-withdraw { background-color: #a6e3a1; color: #11111b; font-weight: 600; border: none; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #181825; }
-        ::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
-        .nav-pills .nav-link { color: #a6adc8; border-radius: 8px; }
-        .nav-pills .nav-link.active { background-color: #89b4fa; color: #11111b; }
-    </style>
-</head>
-<body class="p-3 p-md-4">
-    <div class="container-fluid">
-        <div class="card p-3 mb-3">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div class="d-flex align-items-center gap-2">
-                    <img src="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" alt="Logo" style="width: 40px; height: 40px;">
-                    <h4 class="mb-0 fw-bold text-light">Super Dashboard</h4>
-                </div>
-                <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <div class="stat-pill">💰 Total Balance: <strong class="text-success">$<span id="globalBalance">0.00</span></strong></div>
-                    <div class="stat-pill">🏆 Total Lifetime: <strong class="text-warning">$<span id="globalLifetime">0.00</span></strong></div>
-                    <div class="stat-pill">📡 Global Nodes: <strong class="text-info"><span id="globalOnline">0</span> / <span id="globalTotal">0</span></strong></div>
-                    <button class="btn btn-outline-light btn-sm px-3" style="height: 38px; border-radius: 8px;" type="button" data-bs-toggle="collapse" data-bs-target="#accountManager">⚙️ Kelola Akun ({{ accounts|length }})</button>
-                    <div class="bg-dark px-2" style="height: 38px; border-radius: 8px; border: 1px solid #313244; display: inline-flex; align-items: center;">
-                        <small class="text-secondary me-1">Auto-refresh:</small>
-                        <select id="refreshInterval" class="form-select form-select-sm border-0" style="width: auto; background: transparent; color: #cdd6f4; box-shadow: none;" onchange="updateRefreshInterval()">
-                            <option value="60000" style="background-color: #1e1e2e;">1 Menit</option>
-                            <option value="120000" selected style="background-color: #1e1e2e;">2 Menit</option>
-                            <option value="300000" style="background-color: #1e1e2e;">5 Menit</option>
-                            <option value="600000" style="background-color: #1e1e2e;">10 Menit</option>
-                            <option value="0" style="background-color: #1e1e2e;">Manual</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-primary btn-sm px-3" style="height: 38px; border-radius: 8px;" onclick="fetchAllData()">🔄 Refresh</button>
-                    <a href="/logout" class="btn btn-outline-danger btn-sm px-3 ms-1" style="height: 38px; border-radius: 8px;" title="Keluar">🚪</a>
-                </div>
-            </div>
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, render_template_string
+import sqlite3
+import requests
+import re
+import datetime
+import urllib.parse
+from functools import wraps
+import threading
+import os
+import json
 
-            <div class="collapse mt-3 pt-3 border-top border-secondary" id="accountManager">
-                <div class="row g-3">
-                    <div class="col-md-5">
-                        <div class="p-3 rounded-3" style="background-color: #181825;">
-                            <h6 class="mb-3">➕ Tambah Akun EarnApp Baru</h6>
-                            <form action="/add_account" method="POST">
-                                <input type="text" name="name" class="form-control form-control-sm mb-2" placeholder="🏷️ Nama Akun" required>
-                                <textarea name="cookie" class="form-control form-control-sm mb-2" rows="2" placeholder="🍪 Paste Full Cookie EarnApp..." required></textarea>
-                                <button type="submit" class="btn btn-sm btn-success w-100">💾 Simpan Akun</button>
-                            </form>
-                        </div>
-                    </div>
-                    <div class="col-md-7">
-                        <div class="p-3 rounded-3 h-100" style="background-color: #181825;">
-                            <h6 class="mb-3">📋 Daftar Akun Terdaftar</h6>
-                            <div class="table-responsive" style="max-height: 145px;">
-                                <table class="table table-sm table-dark align-middle">
-                                    <tbody>
-                                        {% for acc in accounts %}
-                                        <tr>
-                                            <td><span class="fw-semibold">🦊 {{ acc[1] }}</span></td>
-                                            <td class="text-end"><a href="/delete_account/{{ acc[0] }}" class="btn btn-sm btn-outline-danger py-0">🗑️ Hapus</a></td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+app = Flask(__name__)
+app.secret_key = "rahasia_earnapp_super_aman_123"
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin"
+
+DB_FILE = "/root/earnapp-web/earnapp.db"
+GOST_API_URL = "http://127.0.0.1:5001/api/failover"
+GOST_DIR = "/opt/gost-proxy"
+
+def init_db():
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute('CREATE TABLE IF NOT EXISTS accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, cookie TEXT)')
+        conn.execute('CREATE TABLE IF NOT EXISTS history (account_id INTEGER, date TEXT, balance REAL, lifetime REAL, PRIMARY KEY (account_id, date))')
+init_db()
+
+def format_waktu(raw_val):
+    try:
+        if raw_val is None: return "0m"
+        s = int(raw_val) // 1000; d = s // 86400; h = (s % 86400) // 3600; m = (s % 3600) // 60
+        if d > 0: return f"{d}d {h}h"
+        if h > 0: return f"{h}h {m}m"
+        return f"{m}m"
+    except: return "0m"
+
+def natural_key(text):
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(text))]
+
+def get_headers(cookie):
+    csrf_match = re.search(r'xsrf-token=([^;]+)', cookie)
+    csrf_token = urllib.parse.unquote(csrf_match.group(1)) if csrf_match else ""
+    return {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": "https://earnapp.com",
+        "Referer": "https://earnapp.com/dashboard/me/passive-income",
+        "xsrf-token": csrf_token,
+        "Cookie": cookie
+    }
+
+def trigger_gost_failover(node_name, detected_ip):
+    try:
+        match = re.search(r'W(\d+)', str(node_name), re.IGNORECASE)
+        if match:
+            idx = int(match.group(1))
+            target_port = 1080 + idx
+            payload = {"port": target_port}
+            res = requests.post(GOST_API_URL, json=payload, timeout=5)
+            if res.status_code == 200:
+                print(f"[AUTO-HEAL] Node {node_name} Blocked. GOST Failover dipicu!")
+    except Exception as e:
+        print(f"[AUTO-HEAL] Error API GOST: {e}")
+
+BLOCK_KEYWORDS = ["blocked", "ip_blocked", "banned", "vpn", "low quality", "low_quality", "not earning", "not_earning", "proxy", "datacenter", "hosting", "blacklisted", "abuse", "restricted", "suspended"]
+ERROR_KEYS = {"error", "error_reason", "err", "reason", "ban_reason", "block_reason", "message", "msg", "problem", "warning", "alert", "status_reason"}
+BOOL_BLOCK_KEYS = {"ip_blocked", "blocked", "is_blocked", "banned", "is_banned", "vpn", "is_vpn", "proxy", "is_proxy", "low_quality"}
+
+def analyze_device_status(dev_dict, raw_st):
+    reasons = []
+    is_blocked, is_online, detected_ip = False, False, ""
+    def scan_obj(obj, ignore_keys=()):
+        nonlocal is_blocked, is_online, detected_ip
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                k_low = str(k).lower()
+                if k_low in ignore_keys or v is None: continue
+                if k_low in ("ip", "detected_ip", "current_ip", "remote_ip") and isinstance(v, str) and v.strip(): detected_ip = v.strip()
+                if k_low in BOOL_BLOCK_KEYS:
+                    if v is True or str(v).lower() in ("true", "1", "yes"):
+                        is_blocked = True; reasons.append(k_low.replace("_", " ").title())
+                    continue
+                if k_low in ("online", "is_online") and (v is True or str(v).lower() == "true"): is_online = True
+                if k_low in ERROR_KEYS:
+                    if isinstance(v, str) and v.strip() and v.strip().lower() not in ("none", "null", "false", "0", "ok"):
+                        is_blocked = True; reasons.append(v.strip())
+                    elif isinstance(v, (dict, list)): scan_obj(v)
+                    continue
+                if isinstance(v, str):
+                    v_low = v.strip().lower()
+                    if any(kw in v_low for kw in BLOCK_KEYWORDS):
+                        is_blocked = True; reasons.append(v.strip())
+                    elif k_low in ("status", "state", "mode") and ("online" in v_low or v_low.isdigit()): is_online = True
+                elif isinstance(v, (dict, list)): scan_obj(v)
+        elif isinstance(obj, list):
+            for item in obj: scan_obj(item, ignore_keys)
+        elif isinstance(obj, str):
+            v_low = obj.strip().lower()
+            if any(kw in v_low for kw in BLOCK_KEYWORDS): is_blocked = True; reasons.append(obj.strip())
+            elif "online" in v_low or v_low.isdigit(): is_online = True
+        elif isinstance(obj, (int, float)) and not isinstance(obj, bool):
+            if obj > 0: is_online = True
+
+    scan_obj(raw_st)
+    scan_obj(dev_dict, ignore_keys=("title", "name", "uuid", "appid", "ips", "country", "rate", "bw", "total_bw", "redeem_bw", "earned", "earned_total", "uptime", "total_uptime", "online_time", "total_online_time"))
+
+    if is_blocked:
+        clean_reasons = []
+        for r in reasons:
+            if r not in clean_reasons: clean_reasons.append(r)
+        reason_text = " | ".join(clean_reasons) if clean_reasons else "IP Blocked / VPN"
+        if detected_ip and detected_ip not in reason_text: reason_text = f"{reason_text} ({detected_ip})"
+        
+        node_title = dev_dict.get('title', dev_dict.get('name', ''))
+        if node_title: threading.Thread(target=trigger_gost_failover, args=(node_title, detected_ip), daemon=True).start()
+        return "blocked", reason_text, detected_ip
+    elif is_online: return "online", "", detected_ip
+    else: return "offline", "", detected_ip
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('logged_in') is not True:
+            if request.path.startswith('/api/'): return jsonify({"success": False, "message": "Akses Ditolak."}), 401
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        if request.form.get('username') == ADMIN_USERNAME and request.form.get('password') == ADMIN_PASSWORD:
+            session['logged_in'] = True; return redirect(url_for('index'))
+        else: error = "Username atau Password salah! Akses ditolak."
+    
+    login_html = """
+    <!DOCTYPE html>
+    <html lang="id" data-bs-theme="dark">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login - Multi-Account Monitoring</title>
+        <link rel="icon" href="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" type="image/png">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>body { background-color: #11111b; color: #cdd6f4; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }</style>
+    </head>
+    <body>
+        <div class="card p-4 shadow-lg" style="background-color: #1e1e2e; border: 1px solid #313244; width: 100%; max-width: 380px; border-radius: 16px;">
+            <div class="text-center mb-4"><img src="https://i.ibb.co.com/wZtz8N8D/EAIcon.png" alt="Logo" style="width: 60px; height: 60px; margin-bottom: 10px;"><h4 class="fw-bold text-light">Secure Access</h4></div>
+            {% if error %}<div class="alert alert-danger p-2 small text-center mb-3">{{ error }}</div>{% endif %}
+            <form method="POST">
+                <input type="text" name="username" class="form-control mb-2 text-center" style="background-color: #181825; border-color: #313244; color: white;" placeholder="Username" required autofocus>
+                <input type="password" name="password" class="form-control mb-4 text-center" style="background-color: #181825; border-color: #313244; color: white;" placeholder="Password" required>
+                <button type="submit" class="btn btn-primary w-100 fw-bold">Login Dashboard</button>
+            </form>
         </div>
+    </body>
+    </html>
+    """
+    return render_template_string(login_html, error=error)
 
-        <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active fw-bold px-4" id="pills-earnapp-tab" data-bs-toggle="pill" data-bs-target="#pills-earnapp" type="button" role="tab">🦊 EarnApp Nodes</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link fw-bold px-4" id="pills-gost-tab" data-bs-toggle="pill" data-bs-target="#pills-gost" type="button" role="tab">🛡️ GOST Proxy Manager</button>
-            </li>
-        </ul>
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None); return redirect(url_for('login'))
 
-        <div class="tab-content" id="pills-tabContent">
-            <div class="tab-pane fade show active" id="pills-earnapp" role="tabpanel" tabindex="0">
-                <div id="dashboardContent" class="row g-4">
-                    <div class="col-12 text-center py-5">
-                        <div class="spinner-border text-info mb-2"></div>
-                        <p class="text-secondary">⏳ Sedang memanen data dari semua akun EarnApp...</p>
-                    </div>
-                </div>
-            </div>
+@app.route('/')
+@login_required
+def index():
+    with sqlite3.connect(DB_FILE) as conn: accounts = conn.execute('SELECT id, name FROM accounts').fetchall()
+    return render_template('index.html', accounts=accounts)
 
-            <div class="tab-pane fade" id="pills-gost" role="tabpanel" tabindex="0">
-                <div class="card p-3">
-                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
-                        <h5 class="mb-1 fw-bold text-info">🛡️ GOST Proxy Binding Status</h5>
-                        <div id="gostBadges"><span class="badge bg-secondary">Memuat...</span></div>
-                    </div>
-                    <div class="table-container">
-                        <table class="table table-sm table-dark table-striped align-middle mb-0">
-                            <thead class="sticky-top" style="background-color: #11111b;">
-                                <tr class="text-secondary small">
-                                    <th class="ps-3">Port</th>
-                                    <th>Kredensial Proxy</th>
-                                    <th>🌐 IP Publik</th>
-                                    <th>📍 Lokasi Region</th>
-                                    <th class="text-center pe-3">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="gostTableBody">
-                                <tr><td colspan="5" class="text-center py-4 text-secondary">⏳ Mengambil data dari mesin GOST...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+@app.route('/add_account', methods=['POST'])
+@login_required
+def add_account():
+    name, cookie = request.form.get('name'), request.form.get('cookie')
+    if name and cookie:
+        with sqlite3.connect(DB_FILE) as conn: conn.execute('INSERT INTO accounts (name, cookie) VALUES (?, ?)', (name.strip(), cookie.strip()))
+    return redirect(url_for('index'))
+
+@app.route('/delete_account/<int:acc_id>')
+@login_required
+def delete_account(acc_id):
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute('DELETE FROM accounts WHERE id = ?', (acc_id,))
+        conn.execute('DELETE FROM history WHERE account_id = ?', (acc_id,))
+    return redirect(url_for('index'))
+
+@app.route('/api/withdraw', methods=['POST'])
+@login_required
+def api_withdraw():
+    data = request.get_json() or {}
+    acc_id, email, method = data.get('acc_id'), str(data.get('email', '')).strip(), str(data.get('payment_method', 'paypal.com')).strip()
+    if not acc_id or not email: return jsonify({"success": False, "message": "Email wajib diisi."}), 400
+    with sqlite3.connect(DB_FILE) as conn: row = conn.execute('SELECT name, cookie FROM accounts WHERE id = ?', (acc_id,)).fetchone()
+    if not row: return jsonify({"success": False, "message": "Akun tidak ditemukan."}), 404
+    headers = get_headers(row[1])
+    try:
+        bal = float(requests.get("https://earnapp.com/dashboard/api/money?appid=earnapp", headers=headers, timeout=12).json().get('balance', 0) or 0)
+        if bal < 2.5: return jsonify({"success": False, "message": f"Saldo minimal $2.50."}), 400
+        res = requests.post("https://earnapp.com/dashboard/api/redeem?appid=earnapp", headers=headers, json={"to": email, "payment_method": method}, timeout=15)
+        return jsonify({"success": res.status_code == 200, "message": "Berhasil dicairkan." if res.status_code==200 else "Ditolak EarnApp."})
+    except Exception as e: return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/api/stats')
+@login_required
+def api_stats():
+    with sqlite3.connect(DB_FILE) as conn: accounts = conn.execute('SELECT id, name, cookie FROM accounts').fetchall()
+    dash = {"total_balance": 0, "total_lifetime": 0, "total_online": 0, "total_nodes": 0, "accounts": []}
+    curr = datetime.datetime.now().strftime("%Y-%m-%d")
+
+    for acc in accounts:
+        try:
+            head = get_headers(acc[2])
+            rm = requests.get("https://earnapp.com/dashboard/api/money?appid=earnapp", headers=head, timeout=12).json()
+            bal, life = float(rm.get('balance', 0) or 0), float(rm.get('earnings_total', rm.get('total_earnings', 0)) or 0)
+            dash["total_balance"] += bal; dash["total_lifetime"] += life
             
-        </div>
-    </div>
+            with sqlite3.connect(DB_FILE) as c_hist:
+                c_hist.execute('INSERT OR REPLACE INTO history (account_id, date, balance, lifetime) VALUES (?, ?, ?, ?)', (acc[0], curr, bal, life))
+                h_rows = c_hist.execute('SELECT date, balance FROM history WHERE account_id = ? ORDER BY date ASC LIMIT 30', (acc[0],)).fetchall()
+            ch_h = {"labels": [r[0][-5:] for r in h_rows], "values": [r[1] for r in h_rows]}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        let chartInstances = {};
-        let refreshTimer = null;
-        window.appData = [];
+            rd = requests.get("https://earnapp.com/dashboard/api/devices?appid=earnapp", headers=head, timeout=12).json()
+            if not isinstance(rd, list): rd = []
+            uuids = {"devices": [{"uuid": d['uuid'], "appid": d.get('appid', 'node_earnapp.com')} for d in rd if isinstance(d, dict) and 'uuid' in d]}
+            st_map = {}
+            if uuids["devices"]:
+                rs = requests.post("https://earnapp.com/dashboard/api/device_statuses?appid=earnapp", headers=head, json=uuids, timeout=12)
+                if rs.status_code == 200:
+                    r_json = rs.json()
+                    if isinstance(r_json, dict): st_map = r_json.get("statuses", r_json.get("devices", r_json))
+                    elif isinstance(r_json, list): st_map = {i["uuid"]: i for i in r_json if isinstance(i, dict) and "uuid" in i}
 
-        document.addEventListener("DOMContentLoaded", () => {
-            const savedInterval = localStorage.getItem('earnapp_refresh_interval');
-            if (savedInterval !== null) document.getElementById('refreshInterval').value = savedInterval;
-            startRefreshTimer();
-            fetchAllData();
-        });
+            dev_info, up_ms = [], 0
+            for d in rd:
+                if not isinstance(d, dict): continue
+                st, err, d_ip = analyze_device_status(d, st_map.get(d.get('uuid'), {}))
+                r_ips = d.get('ips', d.get('ip', []))
+                c_ips = [str(ip).strip() for ip in r_ips if str(ip).strip()] if isinstance(r_ips, list) else [ip.strip().strip("'\"") for ip in str(r_ips).split(',') if ip.strip()]
+                if d_ip and d_ip not in c_ips: c_ips.append(f"{d_ip} (Detected)")
+                u_raw = int(d.get('uptime', d.get('online_time', 0)) or 0)
+                t_raw = int(d.get('total_uptime', d.get('total_online_time', 0)) or 0)
+                up_ms += u_raw
+                dev_info.append({"name": str(d.get('title', d.get('name', 'Unknown'))), "earned": float(d.get('earned', d.get('amount', 0)) or 0), "earned_total": float(d.get('earned_total', d.get('total_earned', 0)) or 0), "uptime": format_waktu(u_raw), "total_uptime": format_waktu(t_raw), "country": str(d.get('country', 'UN')).upper(), "status": st, "error_reason": err, "ips": c_ips})
+            
+            dev_info.sort(key=lambda x: natural_key(x['name']))
+            
+            c_glb, c_top = {"labels": [], "values": []}, {"labels": [], "values": [], "date": "-"}
+            try:
+                ru = requests.get("https://earnapp.com/dashboard/api/usage?appid=earnapp&step=daily", headers=head, timeout=12)
+                if ru.status_code == 200 and isinstance(ru.json(), list):
+                    ag_d, a_dts = {}, set()
+                    for p in ru.json():
+                        if isinstance(p, dict) and "data" in p:
+                            for tg, dr in p.get("data", {}).items():
+                                a_dts.add(tg); ag_d[tg] = ag_d.get(tg, 0) + (int(dr) if dr else 0)
+                    if ag_d:
+                        ts = sorted(ag_d.keys())[-7:]
+                        c_glb["labels"] = [t[5:] for t in ts]
+                        c_glb["values"] = [round(ag_d[t] / 86400000, 2) for t in ts]
+                    if a_dts:
+                        ld = sorted(list(a_dts))[-1]; c_top["date"] = ld; nd = []
+                        for p in ru.json():
+                            if isinstance(p, dict):
+                                rp = p.get("data", {}).get(ld, 0) if isinstance(p.get("data"), dict) else 0
+                                nd.append((str(p.get("title", p.get("name", "Unknown"))), int(rp) if rp else 0))
+                        nd.sort(key=lambda x: x[1], reverse=True); t10 = nd[:10]
+                        c_top["labels"] = [n[0][:12] for n in t10]
+                        c_top["values"] = [round(n[1] / 3600000, 1) for n in t10]
+            except: pass
 
-        function updateRefreshInterval() {
-            localStorage.setItem('earnapp_refresh_interval', document.getElementById('refreshInterval').value);
-            startRefreshTimer();
-        }
+            ac = sum(1 for x in dev_info if x['status'] == 'online')
+            bc = sum(1 for x in dev_info if x['status'] == 'blocked')
+            dash["total_online"] += ac; dash["total_nodes"] += len(dev_info)
+            dash["accounts"].append({"id": acc[0], "name": acc[1], "balance": bal, "lifetime": life, "total_usage": format_waktu(up_ms), "devices": dev_info, "active_nodes": ac, "blocked_nodes": bc, "total_nodes": len(dev_info), "chart_global": c_glb, "chart_top": c_top, "chart_history": ch_h})
+        except Exception as e: dash["accounts"].append({"id": acc[0], "name": acc[1], "error": str(e)})
 
-        function startRefreshTimer() {
-            if (refreshTimer) clearInterval(refreshTimer);
-            const v = parseInt(document.getElementById('refreshInterval').value);
-            if (v > 0) refreshTimer = setInterval(fetchAllData, v);
-        }
+    return jsonify(dash)
 
-        function fetchAllData() {
-            fetchEarnAppStats();
-            fetchGostStats();
-        }
+@app.route('/api/gost')
+@login_required
+def api_gost():
+    """Mengambil data proxy langsung dari file JSON GOST secara aman"""
+    try:
+        def load_j(f):
+            try:
+                with open(os.path.join(GOST_DIR, f), "r") as fp: return json.load(fp)
+            except: return {}
+        
+        sts = {}
+        try:
+            with open(os.path.join(GOST_DIR, "settings.conf"), "r") as f:
+                for l in f:
+                    if "=" in l: 
+                        k, v = l.strip().split("=", 1)
+                        sts[k] = v
+        except: pass
 
-        async function fetchGostStats() {
-            try {
-                const res = await fetch('/api/gost');
-                const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.message || "Endpoint API GOST belum siap atau error.");
+        ipc = load_j("ip_cache.json")
+        lst = load_j("live_status.json")
+        prf = load_j("proxy_performance.json")
+        
+        bnd = {}
+        for z in sts.get("ZONES", "1081-1090").split(","):
+            try:
+                with open(os.path.join(GOST_DIR, f"binds_{z.strip()}.txt"), "r") as f:
+                    for l in f:
+                        if "|" in l: 
+                            p, prx = l.strip().split("|", 1)
+                            bnd[p] = prx
+            except: pass
+
+        plist = []
+        for p, prx in bnd.items():
+            ip = ipc.get(prx, "-") if isinstance(ipc, dict) else "-"
+            
+            loc = "-"
+            if isinstance(prf, dict) and ip in prf and isinstance(prf[ip], dict):
+                loc = prf[ip].get("location", "-")
                 
-                const fo_status = (data.settings && data.settings.AUTO_FAILOVER == "1") ? '<span class="badge badge-online">🔄 Failover ON</span>' : '<span class="badge badge-offline">Failover OFF</span>';
-                const findip_status = (data.settings && data.settings.FINDIP_ENABLE == "1") ? '<span class="badge badge-online">🛡️ FindIP ON</span>' : '';
-                document.getElementById('gostBadges').innerHTML = `${fo_status} ${findip_status}`;
+            st = "Offline"
+            if isinstance(lst, dict):
+                st = lst.get(prx, "Offline")
                 
-                let html = '';
-                if (!data.proxies || data.proxies.length === 0) {
-                    html = '<tr><td colspan="5" class="text-center py-4 text-warning">Belum ada port yang di-bind di sistem GOST.</td></tr>';
-                } else {
-                    data.proxies.forEach(p => {
-                        let badge = '<span class="badge badge-offline">🔴 OFFLINE</span>';
-                        let st = p.status || "";
-                        if (st.includes('Online')) badge = '<span class="badge badge-online">🟢 ONLINE</span>';
-                        else if (st.includes('Failover')) badge = '<span class="badge badge-blocked">🔄 FAILOVER</span>';
-                        else if (st.includes('Checking') || st.includes('Memeriksa')) badge = '<span class="badge bg-secondary">⏳ CHECKING</span>';
-                        
-                        let short_proxy = p.proxy || "";
-                        if(short_proxy.length > 45) short_proxy = short_proxy.substring(0, 45) + '...';
+            plist.append({
+                "port": str(p),
+                "proxy": str(prx),
+                "ip": str(ip),
+                "location": str(loc),
+                "status": str(st)
+            })
 
-                        html += `<tr>
-                            <td class="ps-3 fw-bold text-info">${p.port}</td>
-                            <td class="font-monospace text-secondary" style="font-size: 0.8rem;">${short_proxy}</td>
-                            <td class="text-light">${p.ip}</td>
-                            <td><span class="badge bg-dark border border-secondary text-light">${p.location}</span></td>
-                            <td class="text-center pe-3">${badge}</td>
-                        </tr>`;
-                    });
-                }
-                document.getElementById('gostTableBody').innerHTML = html;
-            } catch (e) {
-                console.error("GOST API Error:", e);
-                document.getElementById('gostTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-4 text-danger"><b>Error Backend:</b> ${e.message}<br><small class="text-secondary">Pastikan Anda sudah mengunduh app.py dari repo terbaru.</small></td></tr>`;
-            }
-        }
+        def get_port_num(x):
+            try: return int(x["port"])
+            except: return 999999
 
-        function filterNodes(accId, status) {
-            document.querySelectorAll(`.btn-filter-${accId}`).forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-outline-secondary'); });
-            const btn = document.getElementById(`btnFilter_${accId}_${status}`);
-            if (btn) { btn.classList.remove('btn-outline-secondary'); btn.classList.add('btn-primary'); }
-            document.querySelectorAll(`.row-node-${accId}`).forEach(row => {
-                row.style.display = (status === 'all' || row.dataset.status === status) ? '' : 'none';
-            });
-        }
+        sorted_plist = sorted(plist, key=get_port_num)
+        return jsonify({"success": True, "settings": sts, "proxies": sorted_plist})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Server Error: {str(e)}"}), 500
 
-        async function fetchEarnAppStats() {
-            try {
-                const response = await fetch('/api/stats');
-                if (response.status === 401 || response.redirected) { window.location.href = '/login'; return; }
-                if (!response.ok) throw new Error(`HTTP Error`);
-                const data = await response.json();
-                window.appData = data.accounts || [];
-
-                document.getElementById('globalBalance').innerText = (data.total_balance || 0).toFixed(2);
-                document.getElementById('globalLifetime').innerText = (data.total_lifetime || 0).toFixed(2);
-                document.getElementById('globalOnline').innerText = data.total_online || 0;
-                document.getElementById('globalTotal').innerText = data.total_nodes || 0;
-
-                Object.values(chartInstances).forEach(c => c.destroy()); chartInstances = {};
-
-                if (window.appData.length === 0) {
-                    document.getElementById('dashboardContent').innerHTML = `<div class="col-12"><div class="card p-4 text-center text-secondary">Belum ada akun EarnApp.</div></div>`;
-                    return;
-                }
-
-                let html = '';
-                window.appData.forEach(acc => {
-                    if (acc.error) {
-                        html += `<div class="col-12"><div class="card border-danger p-3"><h5>😿 ${acc.name}</h5><p class="text-danger mb-0">${acc.error}</p></div></div>`;
-                        return;
-                    }
-                    const blockedCount = acc.blocked_nodes !== undefined ? acc.blocked_nodes : 0;
-                    const warnBadge = blockedCount > 0 ? `<span class="badge badge-blocked ms-1">⚠️ ${blockedCount} Blocked</span>` : '';
-                    
-                    html += `
-                    <div class="col-12"><div class="card p-3 h-100">
-                        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
-                            <div>
-                                <h5 class="mb-1 fw-bold text-info">🦊 ${acc.name}</h5>
-                                <div class="d-flex flex-wrap gap-2 align-items-center small">
-                                    <span class="badge badge-online">🟢 ${acc.active_nodes} / ${acc.total_nodes} Online</span>
-                                    ${warnBadge}
-                                </div>
-                            </div>
-                            <div class="text-end me-3">
-                                <div class="fs-4 fw-bold text-success">💰 $${acc.balance.toFixed(2)}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex flex-wrap justify-content-between align-items-end mb-2 mt-2">
-                            <div class="small fw-semibold text-light mb-1">🖥️ Node List</div>
-                            <div class="btn-group btn-group-sm mb-1" role="group">
-                                <button id="btnFilter_${acc.id}_all" onclick="filterNodes(${acc.id}, 'all')" class="btn btn-primary btn-filter-${acc.id}">Semua</button>
-                                <button id="btnFilter_${acc.id}_online" onclick="filterNodes(${acc.id}, 'online')" class="btn btn-outline-secondary btn-filter-${acc.id}">Online</button>
-                                <button id="btnFilter_${acc.id}_offline" onclick="filterNodes(${acc.id}, 'offline')" class="btn btn-outline-secondary btn-filter-${acc.id}">Offline</button>
-                                <button id="btnFilter_${acc.id}_blocked" onclick="filterNodes(${acc.id}, 'blocked')" class="btn btn-outline-secondary btn-filter-${acc.id}">Blocked (${blockedCount})</button>
-                            </div>
-                        </div>
-                        
-                        <div class="table-container">
-                            <table class="table table-sm table-dark table-striped align-middle">
-                                <thead class="sticky-top" style="background-color: #11111b;">
-                                    <tr class="text-secondary small"><th class="ps-3">Node</th><th>Negara</th><th>🌐 IP Address</th><th>Earned</th><th class="text-center pe-3">Status</th></tr>
-                                </thead>
-                                <tbody id="tbody_${acc.id}">`;
-
-                    acc.devices.forEach(dev => {
-                        const st = dev.status === 'banned' ? 'blocked' : dev.status;
-                        let statusBadge = `<span class="badge badge-offline">🔴 OFFLINE</span>`;
-                        if (st === 'online') statusBadge = `<span class="badge badge-online">🟢 ONLINE</span>`;
-                        else if (st === 'blocked') {
-                            const rLbl = dev.error_reason ? `<small class="text-warning d-block mt-1" style="font-size:0.7rem;">${dev.error_reason}</small>` : '';
-                            statusBadge = `<span class="badge badge-blocked" title="${dev.error_reason || 'IP Blocked'}">⚠️ BLOCKED</span>${rLbl}`;
-                        }
-                        const ipHtml = (dev.ips && dev.ips.length > 0) ? dev.ips.map(ip => `<span class="ip-chip">${ip}</span>`).join(' ') : '<span class="text-muted small">-</span>';
-                        html += `
-                        <tr class="row-node-${acc.id}" data-status="${st}">
-                            <td class="ps-3 fw-semibold text-nowrap">${dev.name}</td>
-                            <td class="text-nowrap"><span class="badge bg-dark border border-secondary text-info">${dev.country}</span></td>
-                            <td>${ipHtml}</td>
-                            <td class="text-nowrap"><span class="fw-bold text-success">$${dev.earned.toFixed(2)}</span></td>
-                            <td class="text-center pe-3">${statusBadge}</td>
-                        </tr>`;
-                    });
-                    html += `</tbody></table></div></div></div>`;
-                });
-                document.getElementById('dashboardContent').innerHTML = html;
-            } catch (error) {
-                document.getElementById('dashboardContent').innerHTML = `<div class="col-12"><div class="card border-danger p-4 text-center"><h5 class="text-danger">⚠️ Gagal Memuat EarnApp</h5><p class="text-light mb-0">${error.message}</p></div></div>`;
-            }
-        }
-    </script>
-</body>
-</html>
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
